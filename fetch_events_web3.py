@@ -1,6 +1,6 @@
 """
 Fetch Aave V3 (Ethereum main market) events between two blocks with web3.py and
-save them to Parquet:
+save them to Parquet on the Onyxia S3 (MinIO) storage:
   - user actions (Supply, Withdraw, Borrow, Repay, LiquidationCall) -> OUT_FILE
   - reserve state updates (ReserveDataUpdated: rates and indexes)   -> RESERVE_FILE
 
@@ -9,6 +9,9 @@ is split into small chunks fetched in parallel. Results are written in segments
 under OUT_DIR and RESERVE_DIR, so an interrupted run resumes where it stopped.
 Once every segment is fetched they are merged into OUT_FILE and RESERVE_FILE.
 
+S3 credentials and endpoint are read from the AWS_* environment variables that
+Onyxia injects into the service, so no extra configuration is needed.
+
 All settings are the constants below. Usage:
     python3 fetch_borrow_repay_w3.py
 """
@@ -16,21 +19,21 @@ import os
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 
 import pandas as pd
+import s3fs
 from dotenv import load_dotenv
 from web3 import Web3
 
 POOL_ADDRESS = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"  # Aave V3 Pool (proxy)
 START_BLOCK  = 0xF89537   # 16,291,127: Pool proxy deployment
-END_BLOCK = 0xFC6161 # 16,540,001: Test block for now
-# END_BLOCK    = 0x180CEED  # 25,218,797
+END_BLOCK    = 0x180CEED  # 25,218,797
 
-OUT_DIR      = Path("data/aave_v3_events_parts")
-OUT_FILE     = Path("data/aave_v3_events.parquet")
-RESERVE_DIR  = Path("data/aave_v3_reserve_parts")
-RESERVE_FILE = Path("data/aave_v3_reserve_data.parquet")
+S3_ROOT      = "s3://bastienlevyguinot/aave_v3"
+OUT_DIR      = f"{S3_ROOT}/aave_v3_events_parts"
+OUT_FILE     = f"{S3_ROOT}/aave_v3_events.parquet"
+RESERVE_DIR  = f"{S3_ROOT}/aave_v3_reserve_parts"
+RESERVE_FILE = f"{S3_ROOT}/aave_v3_reserve_data.parquet"
 
 CHUNK_SIZE   = 10      # blocks per eth_getLogs call (Alchemy free plan max: 10)
 SEGMENT_SIZE = 20_000  # blocks per saved Parquet part
@@ -225,20 +228,25 @@ def to_frame(rows, dtypes):
     return pd.DataFrame(rows, columns=list(dtypes)).astype(dtypes)
 
 
-def resume_block(out_dir, start):
+def list_parts(fs, out_dir):
+    """s3:// paths of the saved segments in out_dir."""
+    fs.invalidate_cache(out_dir)
+    return sorted(f"s3://{p}" for p in fs.glob(f"{out_dir}/part_*.parquet"))
+
+
+def resume_block(fs, out_dir, start):
     """First block not yet covered by a saved segment."""
-    ends = [int(m.group(2)) for p in out_dir.glob("part_*.parquet") if (m := PART_RE.search(p.name))]
+    ends = [int(m.group(2)) for p in list_parts(fs, out_dir) if (m := PART_RE.search(p))]
     return max([start] + [e + 1 for e in ends])
 
 
-def merge_parts(out_dir, start, end, out_file):
-    parts = sorted(
-        p for p in out_dir.glob("part_*.parquet")
-        if (m := PART_RE.search(p.name)) and int(m.group(1)) >= start and int(m.group(2)) <= end
-    )
+def merge_parts(fs, out_dir, start, end, out_file):
+    parts = [
+        p for p in list_parts(fs, out_dir)
+        if (m := PART_RE.search(p)) and int(m.group(1)) >= start and int(m.group(2)) <= end
+    ]
     df = pd.concat([pd.read_parquet(p) for p in parts], ignore_index=True)
     df = df.sort_values(["block_number", "log_index"], ignore_index=True)
-    out_file.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out_file, index=False)
     return df
 
@@ -257,10 +265,9 @@ def main():
     events_by_topic = {e.topic: e for e in events}
     topics = list(events_by_topic)
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    RESERVE_DIR.mkdir(parents=True, exist_ok=True)
+    fs = s3fs.S3FileSystem()  # endpoint and credentials come from Onyxia's AWS_* env vars
     # Resume from the folder that is furthest behind, so both tables cover the same blocks
-    first = min(resume_block(OUT_DIR, START_BLOCK), resume_block(RESERVE_DIR, START_BLOCK))
+    first = min(resume_block(fs, OUT_DIR, START_BLOCK), resume_block(fs, RESERVE_DIR, START_BLOCK))
     if first > START_BLOCK:
         print(f"Resuming from block {first:,}")
 
@@ -280,8 +287,8 @@ def main():
             events_df  = to_frame([r for r in rows if r["event_name"] != "ReserveDataUpdated"], COLUMN_DTYPES)
             reserve_df = to_frame([r for r in rows if r["event_name"] == "ReserveDataUpdated"], RESERVE_COLUMN_DTYPES)
             part_name = f"part_{seg_start:09d}_{seg_end:09d}.parquet"
-            events_df.to_parquet(OUT_DIR / part_name, index=False)
-            reserve_df.to_parquet(RESERVE_DIR / part_name, index=False)
+            events_df.to_parquet(f"{OUT_DIR}/{part_name}", index=False)
+            reserve_df.to_parquet(f"{RESERVE_DIR}/{part_name}", index=False)
 
             n_events  += len(events_df)
             n_updates += len(reserve_df)
@@ -292,11 +299,11 @@ def main():
                   f"{len(events_df):5d} events (total {n_events:,}) | "
                   f"{len(reserve_df):5d} reserve updates (total {n_updates:,}) | ETA {eta_h:.1f} h", flush=True)
 
-    events_df = merge_parts(OUT_DIR, START_BLOCK, end, OUT_FILE)
+    events_df = merge_parts(fs, OUT_DIR, START_BLOCK, end, OUT_FILE)
     print(f"Saved {len(events_df):,} events to {OUT_FILE}")
     print(events_df["event_name"].value_counts().to_string())
 
-    reserve_df = merge_parts(RESERVE_DIR, START_BLOCK, end, RESERVE_FILE)
+    reserve_df = merge_parts(fs, RESERVE_DIR, START_BLOCK, end, RESERVE_FILE)
     print(f"Saved {len(reserve_df):,} reserve updates to {RESERVE_FILE}")
 
 
