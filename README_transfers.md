@@ -7,7 +7,7 @@ dans un nouvel environnement (nouvelle conversation, nouveau service Onyxia).
 
 Collecter **l'ensemble des transferts de chaque utilisateur** présent dans
 `aave_v3_events.parquet` (207 780 adresses uniques) et les enregistrer dans
-**un seul fichier** : `s3://bastienlevyguinot/aave_v3/transfers.parquet`.
+**un seul fichier** : `s3://bastienlevyguinot/diffusion/transfers.parquet`.
 
 Approche recommandée (à confirmer avant d'écrire le script) :
 
