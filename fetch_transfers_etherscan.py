@@ -186,9 +186,9 @@ def main():
     parser.add_argument("--test", type=int, metavar="N", help="fetch only N users and save nothing")
     args = parser.parse_args()
 
-    api_key = os.environ.get("ETHERSCAN_API_KEY", "").strip()
+    api_key = os.environ.get("ETHERSCAN_KEY", "").strip()
     if not api_key:
-        raise SystemExit("ETHERSCAN_API_KEY is not set: add it as an Onyxia secret and restart the service")
+        raise SystemExit("ETHERSCAN_KEY is not set: add it as an Onyxia secret and restart the service")
 
     session = requests.Session()
     limiter = RateLimiter(CALLS_PER_SEC)
