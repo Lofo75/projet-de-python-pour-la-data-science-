@@ -3,12 +3,13 @@ Fetch every ERC-20 transfer (sent and received) of each Aave V3 user with the
 Etherscan V2 API (module=account, action=tokentx) and save them to a single
 Parquet file on the Onyxia S3 (MinIO) storage.
 
-Users are the unique "user" addresses of EVENTS_FILE. They are processed in
+Users are the unique "user" addresses of EVENTS_FILE, except the null address
+(mint/burn counterparty, not a wallet). They are processed in
 batches of BATCH_SIZE addresses, each saved as one Parquet part under OUT_DIR
 (with a "user" column), so an interrupted run resumes after the last saved
 batch. Once every batch is fetched they are merged into OUT_FILE.
 
-Etherscan returns at most 10,000 rows per call. When an address has more, the
+Etherscan returns at most 1,000 rows per call. When an address has more, the
 rows of the last (possibly incomplete) block are dropped and the next call
 starts from that block, until the whole range is covered.
 
@@ -45,7 +46,7 @@ OUT_DIR     = "s3://bastienlevyguinot/aave_v3/transfers_parts"
 OUT_FILE    = "s3://bastienlevyguinot/diffusion/transfers.parquet"
 
 BATCH_SIZE    = 1_000   # users per saved Parquet part
-MAX_ROWS      = 10_000  # Etherscan cap on rows per call
+MAX_ROWS      = 1_000   # Etherscan cap on rows per call
 CALLS_PER_SEC = 4       # free plan: 5 calls/s, keep a margin
 WORKERS       = 4       # parallel calls (the rate limiter is shared)
 
@@ -55,7 +56,6 @@ FIELDS = {
     "blockNumber":      "block_number",
     "timeStamp":        "timestamp",
     "hash":             "tx_hash",
-    "logIndex":         "log_index",
     "from":             "from",
     "to":               "to",
     "contractAddress":  "token_address",
@@ -69,7 +69,6 @@ SCHEMA = pa.schema([
     ("block_number",   pa.int64()),
     ("timestamp",      pa.int64()),
     ("tx_hash",        pa.string()),
-    ("log_index",      pa.int64()),
     ("from",           pa.string()),
     ("to",             pa.string()),
     ("token_address",  pa.string()),
@@ -79,6 +78,8 @@ SCHEMA = pa.schema([
     ("value",          pa.string()),
 ])
 INT_COLUMNS = [f.name for f in SCHEMA if f.type == pa.int64()]
+
+NULL_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 BATCH_RE = re.compile(r"batch_(\d+)\.parquet$")
 
@@ -145,7 +146,7 @@ def fetch_user(session, limiter, api_key, user, end_block):
         # Truncated: keep the complete blocks, start again from the last one
         last = int(result[-1]["blockNumber"])
         complete = [t for t in result if int(t["blockNumber"]) < last]
-        if not complete:  # a single block with 10,000 transfers: cannot split further
+        if not complete:  # a single block with MAX_ROWS transfers: cannot split further
             print(f"Warning: {user} has >= {MAX_ROWS} transfers in block {last}, some are missing", flush=True)
             rows += result
             start = last + 1
@@ -193,7 +194,8 @@ def main():
     limiter = RateLimiter(CALLS_PER_SEC)
     end_block = int(call(session, limiter, api_key, {"module": "proxy", "action": "eth_blockNumber"}), 16)
 
-    users = sorted(pd.read_parquet(EVENTS_FILE, columns=["user"])["user"].dropna().unique())
+    users = pd.read_parquet(EVENTS_FILE, columns=["user"])["user"].dropna().unique()
+    users = sorted(u for u in users if u.lower() != NULL_ADDRESS)
     print(f"{len(users):,} users, blocks {START_BLOCK:,}-{end_block:,}")
 
     def fetch(user):
