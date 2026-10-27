@@ -11,7 +11,8 @@ batch. Once every batch is fetched they are merged into OUT_FILE.
 
 Etherscan returns at most 1,000 rows per call. When an address has more, the
 rows of the last (possibly incomplete) block are dropped and the next call
-starts from that block, until the whole range is covered.
+starts from that block, until the whole range is covered. A single block with
+1,000+ rows is paged through on its own (up to 10,000 rows).
 
 A transfer between two Aave users appears twice, once for each user.
 
@@ -47,6 +48,7 @@ OUT_FILE    = "s3://bastienlevyguinot/diffusion/transfers.parquet"
 
 BATCH_SIZE    = 1_000   # users per saved Parquet part
 MAX_ROWS      = 1_000   # Etherscan cap on rows per call
+MAX_WINDOW    = 10_000  # Etherscan cap on page * offset for one query
 CALLS_PER_SEC = 4       # free plan: 5 calls/s, keep a margin
 WORKERS       = 4       # parallel calls (the rate limiter is shared)
 
@@ -117,6 +119,8 @@ def call(session, limiter, api_key, params, max_retries=10):
             result = data.get("result")
             if data.get("status") == "1" or isinstance(result, list):
                 return result  # "No transactions found" comes with status 0 and an empty list
+            if "jsonrpc" in data and "error" not in data and isinstance(result, str) and result.startswith("0x"):
+                return result  # proxy module answers in JSON-RPC format, without a status field
             error = f"{data.get('message')}: {result}"
             if "daily" in error.lower():
                 print(f"Daily quota reached ({error}), waiting 1 h", flush=True)
@@ -128,6 +132,22 @@ def call(session, limiter, api_key, params, max_retries=10):
         if attempt == max_retries:
             raise RuntimeError(f"Etherscan call failed for {params.get('address')}: {error}")
         time.sleep(min(2 ** attempt, 60) * random.uniform(0.5, 1.5))
+
+
+def fetch_block(session, limiter, api_key, user, block):
+    """All ERC-20 transfers of one address in one block, using pagination (capped at MAX_WINDOW rows)."""
+    rows = []
+    for page in range(1, MAX_WINDOW // MAX_ROWS + 1):
+        result = call(session, limiter, api_key, {
+            "module": "account", "action": "tokentx", "address": user,
+            "startblock": block, "endblock": block,
+            "page": page, "offset": MAX_ROWS, "sort": "asc",
+        })
+        rows += result
+        if len(result) < MAX_ROWS:
+            return rows
+    print(f"Warning: {user} has >= {MAX_WINDOW} transfers in block {block}, some are missing", flush=True)
+    return rows
 
 
 def fetch_user(session, limiter, api_key, user, end_block):
@@ -146,9 +166,8 @@ def fetch_user(session, limiter, api_key, user, end_block):
         # Truncated: keep the complete blocks, start again from the last one
         last = int(result[-1]["blockNumber"])
         complete = [t for t in result if int(t["blockNumber"]) < last]
-        if not complete:  # a single block with MAX_ROWS transfers: cannot split further
-            print(f"Warning: {user} has >= {MAX_ROWS} transfers in block {last}, some are missing", flush=True)
-            rows += result
+        if not complete:  # a single block with MAX_ROWS transfers: page through that block alone
+            rows += fetch_block(session, limiter, api_key, user, last)
             start = last + 1
         else:
             rows += complete
