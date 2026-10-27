@@ -236,9 +236,9 @@ def etherscan_get(params, retries=5):
     for attempt in range(retries):
         try:
             result = requests.get(ETHERSCAN_BASE_URL, params=params, timeout=15).json().get("result")
-        except requests.exceptions.RequestException as err:   # timeout, coupure réseau...
+        except requests.exceptions.RequestException as err:   # timeout
             result = f"erreur réseau : {err}"
-        if isinstance(result, list):
+        if isinstance(result, list):  #on teste si c'est une liste 
             time.sleep(0.35)
             return result
         print(f"  tentative {attempt + 1}/{retries} échouée : {result}", flush=True)
@@ -256,7 +256,9 @@ def fetch_logs(topic0, start, end):
     logs = etherscan_get(params)
     if len(logs) < PAGE:
         return logs
-
+    mid = (start + end) // 2
+    return fetch_logs(topic0, start, mid) + fetch_logs(topic0, mid + 1, end)
+"""#très rare d'utiliser ça 
     if start == end:
         page = 2
         while True:
@@ -267,26 +269,45 @@ def fetch_logs(topic0, start, end):
                 break
             page += 1
         return logs
+"""
+ 
 
-    mid = (start + end) // 2
-    return fetch_logs(topic0, start, mid) + fetch_logs(topic0, mid + 1, end)
+def addr(x):
+    return "0x" + x[-40:]       # une adresse = les 40 derniers caractères
 
 def decode_log(event, log):
-    return {
+    data = log["data"][2:]                                   # on enlève le "0x"
+    w = [data[i:i+64] for i in range(0, len(data), 64)]      # data découpé en mots de 32 octets
+    t = log["topics"]
+
+    row = {                                                  # on stocke dans une variable...
         "event": event,
         "block_number": decode(log["blockNumber"]),
         "timestamp": decode(log["timeStamp"]),
-        "tx_hash": log["transactionHash"],      # on garde la chaîne
+        "tx_hash": log["transactionHash"],
         "log_index": decode(log["logIndex"]),
     }
 
-RUN_FETCH = True    # passe à False pour ne pas relancer la collecte
+    if event in ("supply", "borrow"):                        # ...pour pouvoir la compléter ici
+        row["reserve"] = addr(t[1])
+        row["user"] = addr(w[0])
+        row["amount_raw"] = int(w[1], 16)
 
-if RUN_FETCH:
-    tables = {}
-    for event, topic0 in EVENTS.items():
-        logs = fetch_logs(topic0, START_BLOCK, END_BLOCK)    # fetch_logs, pas get_logs
-        print(f"{event}: {len(logs)} logs")
-        tables[event] = pd.DataFrame([decode_log(event, log) for log in logs])
-        tables[event].to_csv(f"aave_{event}.csv", index=False)   # sauvegarde
+    elif event in ("withdraw", "repay"):
+        row["reserve"] = addr(t[1])
+        row["user"] = addr(t[2])
+        row["amount_raw"] = int(w[0], 16)
+
+    elif event == "liquidation":
+        row["user"] = addr(t[3])
+        row["debt_to_cover_raw"] = int(w[0], 16)
+        row["liquidator"] = addr(w[2])
+
+    return row                                               # un seul return, tout à la fin
+tables = {}
+for event, topic0 in EVENTS.items():
+    logs = fetch_logs(topic0, START_BLOCK, END_BLOCK)    
+    print(f"{event}: {len(logs)} logs")
+    tables[event] = pd.DataFrame([decode_log(event, log) for log in logs])
+    
 print(tables)
