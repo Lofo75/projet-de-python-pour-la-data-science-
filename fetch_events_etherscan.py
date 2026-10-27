@@ -43,8 +43,8 @@ AAVE_V3_POOL = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
 BORROW_TOPIC0 = "0xb3d084820fb1a9decffb176436bd02558d15fac9b0ddfed8c465bc7359d7dce0" #clé de hashage de l'action 
 
 START_BLOCK = 16291127
-END_BLOCK = 25218797
-
+END_BLOCK = 17000000
+#25218797
 
 
 params = {
@@ -143,7 +143,7 @@ tables["borrow"]         # un tableau par événement
 
 
 #tentative de boucler pour segmenter les requêts sur getlog 100 000 par 100 000 
-
+"""
 START_BLOCK = 16291127
 END_BLOCK = 25218797
 
@@ -211,3 +211,82 @@ for i in range(len(end_block_cut) - 1):
         print(tables)
 
     tables["borrow"] 
+
+
+"""
+
+
+#on divise par deux à chaque fois que ça sature 
+
+import time, requests, pandas as pd
+
+PAGE = 1000
+EVENTS = {
+    "supply": "0x2b627736bca15cd5381dcf80b0bf11fd197d01a037c52b927a881a10fb73ba61",
+    "withdraw": "0x3115d1449a7b732c986cba18244e897a450f61e1bb8d589cd2e69e6c8924f9f7",
+    "borrow": "0xb3d084820fb1a9decffb176436bd02558d15fac9b0ddfed8c465bc7359d7dce0",
+    "repay": "0xa534c8dbe71f871f9f3530e97a74601fea17b426cae02e1c5aee42c96c784051",
+    "liquidation": "0xe413a321e8681d831f4dbccbca790d2952b56f977908e45be37335533e005286",
+}
+
+def decode(valeur):
+    return int(valeur, 16) if valeur not in ("0x", "") else 0
+
+def etherscan_get(params, retries=5):
+    for attempt in range(retries):
+        try:
+            result = requests.get(ETHERSCAN_BASE_URL, params=params, timeout=15).json().get("result")
+        except requests.exceptions.RequestException as err:   # timeout, coupure réseau...
+            result = f"erreur réseau : {err}"
+        if isinstance(result, list):
+            time.sleep(0.35)
+            return result
+        print(f"  tentative {attempt + 1}/{retries} échouée : {result}", flush=True)
+        time.sleep(1 + attempt)
+    raise RuntimeError(f"Erreur Etherscan : {result}")
+
+def fetch_logs(topic0, start, end):
+    params = {
+        "chainid": ETH_CHAIN_ID, "module": "logs", "action": "getLogs",
+        "address": AAVE_V3_POOL, "topic0": topic0,
+        "fromBlock": start, "toBlock": end,
+        "page": 1, "offset": PAGE,
+        "apikey": ETHERSCAN_API_KEY,
+    }
+    logs = etherscan_get(params)
+    if len(logs) < PAGE:
+        return logs
+
+    if start == end:
+        page = 2
+        while True:
+            params["page"] = page
+            more = etherscan_get(params)
+            logs += more
+            if len(more) < PAGE:
+                break
+            page += 1
+        return logs
+
+    mid = (start + end) // 2
+    return fetch_logs(topic0, start, mid) + fetch_logs(topic0, mid + 1, end)
+
+def decode_log(event, log):
+    return {
+        "event": event,
+        "block_number": decode(log["blockNumber"]),
+        "timestamp": decode(log["timeStamp"]),
+        "tx_hash": log["transactionHash"],      # on garde la chaîne
+        "log_index": decode(log["logIndex"]),
+    }
+
+RUN_FETCH = True    # passe à False pour ne pas relancer la collecte
+
+if RUN_FETCH:
+    tables = {}
+    for event, topic0 in EVENTS.items():
+        logs = fetch_logs(topic0, START_BLOCK, END_BLOCK)    # fetch_logs, pas get_logs
+        print(f"{event}: {len(logs)} logs")
+        tables[event] = pd.DataFrame([decode_log(event, log) for log in logs])
+        tables[event].to_csv(f"aave_{event}.csv", index=False)   # sauvegarde
+print(tables)
