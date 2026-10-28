@@ -12,7 +12,9 @@ batch. Once every batch is fetched they are merged into OUT_FILE.
 Etherscan returns at most 1,000 rows per call. When an address has more, the
 rows of the last (possibly incomplete) block are dropped and the next call
 starts from that block, until the whole range is covered. A single block with
-1,000+ rows is paged through on its own (up to 10,000 rows).
+1,000+ rows is paged through on its own (up to 10,000 rows). An address is
+cut after MAX_CALLS_PER_USER calls (only its earliest transfers are kept), so
+that contracts and bots with millions of transfers don't block the run.
 
 A transfer between two Aave users appears twice, once for each user.
 
@@ -49,8 +51,9 @@ OUT_FILE    = "s3://bastienlevyguinot/diffusion/transfers.parquet"
 BATCH_SIZE    = 1_000   # users per saved Parquet part
 MAX_ROWS      = 1_000   # Etherscan cap on rows per call
 MAX_WINDOW    = 10_000  # Etherscan cap on page * offset for one query
-CALLS_PER_SEC = 4       # free plan: 5 calls/s, keep a margin
+CALLS_PER_SEC = 2.8     # free plan: 3 calls/s, keep a margin
 WORKERS       = 4       # parallel calls (the rate limiter is shared)
+MAX_CALLS_PER_USER = 20 # contracts/bots (burn address, DEX pools, MEV) have millions of transfers: keep the first ~20,000
 
 # Etherscan field -> column name (snake_case, as in aave_v3_events.parquet).
 # value is kept exact as a string (divide by 10**token_decimal for token units).
@@ -154,7 +157,7 @@ def fetch_user(session, limiter, api_key, user, end_block):
     """All ERC-20 transfers of one address between START_BLOCK and end_block."""
     rows = []
     start = START_BLOCK
-    while True:
+    for _ in range(MAX_CALLS_PER_USER):
         result = call(session, limiter, api_key, {
             "module": "account", "action": "tokentx", "address": user,
             "startblock": start, "endblock": end_block,
@@ -172,6 +175,8 @@ def fetch_user(session, limiter, api_key, user, end_block):
         else:
             rows += complete
             start = last
+    else:
+        print(f"Warning: {user} truncated at block {start:,} ({len(rows):,} transfers kept)", flush=True)
     return [{"user": user, **{col: t.get(field) for field, col in FIELDS.items()}} for t in rows]
 
 
