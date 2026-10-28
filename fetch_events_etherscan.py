@@ -309,5 +309,5 @@ for event, topic0 in EVENTS.items():
     logs = fetch_logs(topic0, START_BLOCK, END_BLOCK)    
     print(f"{event}: {len(logs)} logs")
     tables[event] = pd.DataFrame([decode_log(event, log) for log in logs])
-    
+    tables[event].to_csv(f"aave_{event}.csv", index=False)
 print(tables)
