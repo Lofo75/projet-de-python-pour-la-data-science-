@@ -96,8 +96,3 @@ print(
         KEY + ["user_ref", "user_alc"]
     ].head(20).to_string(index=False)
 )
-# %% 7. Les logs qui manquent chez Alchemy ----------------------------------------
-manquants = merged[merged["_merge"] == "left_only"]
-print(len(manquants), "logs de la référence absents d'Alchemy")
-manquants.head()
-# %%
