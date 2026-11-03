@@ -43,8 +43,8 @@ AAVE_V3_POOL = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
 BORROW_TOPIC0 = "0xb3d084820fb1a9decffb176436bd02558d15fac9b0ddfed8c465bc7359d7dce0" #clé de hashage de l'action 
 
 START_BLOCK = 16291127
-END_BLOCK = 17000000
-#25218797
+END_BLOCK = 25218797
+
 
 
 params = {
@@ -309,5 +309,5 @@ for event, topic0 in EVENTS.items():
     logs = fetch_logs(topic0, START_BLOCK, END_BLOCK)    
     print(f"{event}: {len(logs)} logs")
     tables[event] = pd.DataFrame([decode_log(event, log) for log in logs])
-    
+    tables[event].to_csv(f"aave_{event}.csv", index=False)
 print(tables)
