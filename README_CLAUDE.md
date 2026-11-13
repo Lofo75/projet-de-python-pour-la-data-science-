@@ -13,11 +13,11 @@ sessions: read a script before trusting what this file says about it.
    Aave transactions themselves. Run `python trace_wallets.py` (about 47M rows
    in one pass) and look at the share kept and at a few users' ledgers and
    original portfolios.
-2. **Priority: fetch native ETH** with `fetch_eth_etherscan.py` (written and
-   tested with `--test`, full run not started). About 351k calls: ~41 h at
-   the rate limit, ~2 days with two keys (100,000 calls/day each). Output
-   ~27M rows, ~3 GB. Then merge the ETH flows into the tracing (under the
-   WETH address, as the original script's ETH/WETH `asset_key`).
+2. **Native ETH is now in the tracing** (2026-11-12, see "Native ETH in
+   `trace_wallets.py`"). `fetch_eth_etherscan.py` finished on 2026-11-11:
+   `diffusion/eth_transfers_wallets.parquet` has 36,356,546 rows for all
+   175,453 users (14.3M of them move ETH). The full `trace_wallets.py` run
+   has not been done yet.
 3. **The events stop on 2026-05-31 (block 25,218,786), the transfers go on to
    2026-10-28.** 13.6% of the sample's transfers are after the last event, so
    their Aave transactions were not `tracked` (real Repay events missing from
@@ -90,9 +90,9 @@ events, with exactly the same set of users. About 10% of the transfers are
   in one transaction are legitimate, so never deduplicate. The order of a
   user's transactions within one block is Etherscan's order, which may not be
   the true order.
-- **Only ERC-20 transfers are in the data.** There is no native ETH (neither
-  `txlist` nor `txlistinternal` was fetched), and aToken interest emits no
-  transfer.
+- **`transfers_wallets.parquet` holds ERC-20 transfers only.** Native ETH is
+  in `eth_transfers_wallets.parquet` (`fetch_eth_etherscan.py`) and is merged
+  in by `trace_wallets.py`. aToken interest emits no transfer.
 - **`tracked = True`:** the user has an Aave event (Supply, Withdraw, Borrow,
   Repay or LiquidationCall) in the same transaction. It has the same value
   for every row of a `(tx_hash, user)`.
@@ -301,9 +301,47 @@ back". It costs one `eth_getTransactionByHash` per traced pure send (about
 - **`token_decimal` NA** is treated as 0 decimals. The integer columns
   contain no NA (checked earlier).
 
+## Native ETH in `trace_wallets.py` (2026-11-12)
+
+- `load_eth` reads `ETH_FILE` once, in memory (the machine has ~1 TB of RAM):
+  rows with `value > 0`, `is_error = 0`, block <= last event block. They become
+  transfer rows with `token_address = WETH`, `token_symbol = "ETH"`,
+  `token_name = "Ether"`, 18 decimals: ETH and WETH share one ledger entry
+  (its symbol in the ledgers is `WETH+ETH`). `tracked` comes from the events:
+  `(tx_hash, user)` has an event.
+- **Wraps and unwraps are dropped** (ETH sent to the WETH contract by a normal
+  transaction, ETH paid by it in an internal one, ~120k each): WETH emits no
+  ERC-20 Transfer for them, so keeping the ETH leg alone would debit or
+  credit the shared entry for nothing.
+- `add_eth` adds each chunk's users' ETH rows and sorts each user's rows by
+  block (stable: within a block, ERC-20 transactions first, since the
+  transaction index was not fetched).
+- The 15 users whose ETH history was cut (`ETH_STATUS_DIR`, bots with ~20k
+  transactions) are skipped entirely, ERC-20 rows included.
+- What it fixes: Aave's WrappedTokenGateway pays borrows and withdrawals in
+  native ETH (an internal transaction), and swaps to ETH pay out native ETH.
+  Gateway withdrawals have the gateway as event `user`, so for the wallet
+  they are untracked: aWETH sent (traced) and ETH received, credited at `f`.
+
+Measured on the 3.0M-row sample (cut at the last event): ERC-20 rows kept
+19.0% -> 20.0% (26,948 newly kept, 737 no longer); ETH rows kept 9.4%; all
+rows 17.6%. Original portfolio: `supply` 51,295 -> 47,241 rows (ETH supplied
+through the gateway out of traced ETH is no longer counted as own funds);
+`complement` 1,359 -> 5,269. Half of the new complements (2,674) are own ETH
+with a median of 0.0001 ETH sent alongside traced tokens, mostly to bridges
+and Uniswap V3 positions: fees (bridge messaging) rather than exposure. Not
+filtered; the user may want a threshold.
+
 ## Testing
 
-There are no automated tests. What was done (2026-11-09, simplified rules):
+There are no automated tests. With native ETH (2026-11-12): a synthetic
+user (ETH borrowed through the gateway, swapped for USDC, WETH sold from the
+same entry); `main()` on 300 real users with their ETH, `CHUNK_ROWS = 937`
+and one user marked as cut: identical to a one-pass run, the cut user absent,
+every user's rows in block order. The paths `ETH_FILE` and `ETH_STATUS_DIR`
+must be monkeypatched too.
+
+What was done earlier (2026-11-09, simplified rules):
 - `trace_user` on one synthetic user: own ETH supplied (`supply` 10),
   borrowed USDC re-supplied (no contribution), own ETH sent with traced USDC
   at `f = 1` and `f = 0.5` (`complement` 2 and 0.5). Checked by hand.

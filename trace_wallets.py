@@ -25,8 +25,19 @@ only grows through Aave transactions and through what is obtained by
 spending traced tokens (swaps, LP deposits, ...).
 
 Transfers from the user to themselves count as both sent and received. Debt
-tokens are traced like any other ERC-20 token. The data
-has no native ETH, so unlike the original no ETH/WETH merge is needed.
+tokens are traced like any other ERC-20 token.
+
+NATIVE ETH (ETH_FILE, see fetch_eth_etherscan.py) is added to the ERC-20
+transfers as rows of a token with WETH's address and the symbol "ETH": as in
+the original script, ETH and WETH share one ledger entry. Only the rows that
+move ETH are used (value > 0, is_error = 0). Wrapping and unwrapping (ETH
+sent to the WETH contract, ETH paid by it) are dropped: WETH emits no ERC-20
+Transfer for them, and within one ledger entry they change nothing. An ETH
+row is tracked when the user has an Aave event in its transaction. Each
+user's ETH and ERC-20 rows are merged in block order (within a block, the
+ERC-20 transactions come first: the order of transactions within a block is
+unknown). The users whose ETH history was cut by the fetch (ETH_STATUS_DIR)
+are skipped entirely.
 
 ORIGINAL PORTFOLIO: the user's own funds that entered the traced flows, as
 a log of contributions (every user is treated as supplying their own
@@ -42,12 +53,13 @@ collateral, and aTokens are assets like any other):
     Debt tokens (symbol starting with DEBT_PREFIXES) are never complements:
     burning one repays a loan, it does not spend own funds.
 
-Transfers after the last block of EVENTS_FILE are dropped: there, Aave
+Transfers (ERC-20 and ETH) after the last block of EVENTS_FILE are dropped: there, Aave
 transactions could not be recognised. The rows of INPUT_FILE are read in
 chunks of CHUNK_ROWS (a user is split
 across chunks at most at a chunk border: its rows are carried over to the
 next chunk). Outputs:
-  - OUT_FILE:     the transfers with traced_fraction > 0, plus that column;
+  - OUT_FILE:     the transfers with traced_fraction > 0 (ETH rows included,
+    token_symbol "ETH"), plus that column;
   - LEDGERS_FILE: each user's final ledger, one row per token touched by a
     transaction with f > 0 (zeroed entries included);
   - ORIGINAL_FILE: the original portfolio contributions, one row per
@@ -68,6 +80,8 @@ import s3fs
 
 INPUT_FILE    = "s3://bastienlevyguinot/diffusion/transfers_wallets.parquet"
 EVENTS_FILE   = "s3://bastienlevyguinot/diffusion/aave_v3_events_wallets.parquet"
+ETH_FILE      = "s3://bastienlevyguinot/diffusion/eth_transfers_wallets.parquet"
+ETH_STATUS_DIR = "s3://bastienlevyguinot/aave_v3/eth_status_parts"
 OUT_FILE      = "s3://bastienlevyguinot/diffusion/transfers_wallets_traced.parquet"
 LEDGERS_FILE  = "s3://bastienlevyguinot/aave_v3/filtering_ledgers.parquet"
 ORIGINAL_FILE = "s3://bastienlevyguinot/diffusion/original_portfolios.parquet"
@@ -77,6 +91,7 @@ RPC_URL = "https://ethereum.publicnode.com"
 CHUNK_ROWS   = 1_000_000
 MIN_FRACTION = 1e-6  # smaller traced fractions are float residue: treated as 0
 DEBT_PREFIXES = ("variableDebt", "stableDebt")  # debt tokens of Aave and its forks: never own funds
+WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"  # native ETH rows use this token_address
 
 
 def trace_user(user, tx_hash, src, dst, token, amount, tracked, supplies=None, debt_tokens=()):
@@ -154,21 +169,72 @@ def reserve_info(reserves):
     return info
 
 
-def load_supplies(fs):
-    """user -> tx_hash -> {reserve: amount supplied in token units}, reserve -> symbol, and the
-    last block of the events."""
+def load_events(fs):
+    """user -> tx_hash -> {reserve: amount supplied in token units}, reserve -> symbol, the
+    last block of the events, and the (tx_hash, user) of every event (lowercased)."""
     with fs.open(EVENTS_FILE, "rb") as f:
         ev = pd.read_parquet(f, columns=["event_name", "block_number", "user", "tx_hash", "reserve",
                                          "amount_raw"])
     last_block = int(ev["block_number"].max())
-    ev = ev[ev["event_name"] == "Supply"]
     ev = ev.assign(user=ev["user"].str.lower(), tx_hash=ev["tx_hash"].str.lower(),
                    reserve=ev["reserve"].str.lower())
+    aave_txs = set(zip(ev["tx_hash"], ev["user"]))
+    ev = ev[ev["event_name"] == "Supply"]
     info = reserve_info(sorted(ev["reserve"].unique()))
     supplies = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
     for u, h, r, a in zip(ev["user"], ev["tx_hash"], ev["reserve"], ev["amount_raw"]):
         supplies[u][h][r] += int(a) / 10 ** info[r][0]  # several Supply events of one tx are summed
-    return supplies, {r: sym for r, (_, sym) in info.items()}, last_block
+    return supplies, {r: sym for r, (_, sym) in info.items()}, last_block, aave_txs
+
+
+def cut_eth_users(fs):
+    """Lowercased users whose ETH history was cut by fetch_eth_etherscan.py."""
+    cut = set()
+    for path in fs.glob(f"{ETH_STATUS_DIR}/batch_*.parquet"):
+        with fs.open(path, "rb") as f:
+            status = pd.read_parquet(f)
+        cut |= set(status.loc[status["truncated"], "user"].str.lower())
+    return cut
+
+
+def load_eth(fs, schema, last_block, aave_txs, skip):
+    """The rows of ETH_FILE that move ETH, as transfer rows of `schema` sorted by user, and
+    lowercased user -> (first row, end row)."""
+    with fs.open(ETH_FILE, "rb") as f:
+        t = pq.read_table(f, columns=["user", "kind", "block_number", "timestamp", "tx_hash",
+                                      "from", "to", "value", "is_error"])
+    weth = WETH.lower()
+    keep = pc.and_(pc.and_(pc.not_equal(t["value"], "0"), pc.equal(t["is_error"], 0)),
+                   pc.less_equal(t["block_number"], last_block))
+    wrap = pc.or_(pc.and_(pc.equal(t["kind"], "normal"), pc.equal(pc.utf8_lower(t["to"]), weth)),
+                  pc.and_(pc.equal(t["kind"], "internal"), pc.equal(pc.utf8_lower(t["from"]), weth)))
+    t = t.filter(pc.and_(keep, pc.invert(wrap)))
+    df = t.to_pandas()
+    df["u"] = df["user"].str.lower()
+    df = df[~df["u"].isin(skip)].sort_values("u", kind="stable")  # each user's order is kept
+    df["tracked"] = [(h, u) in aave_txs for h, u in zip(df["tx_hash"], df["u"])]
+    df = df.assign(token_address=WETH, token_symbol="ETH", token_name="Ether", token_decimal=18)
+    bounds = df.reset_index(drop=True).groupby("u", sort=False).indices
+    index = {u: (int(rows[0]), int(rows[-1]) + 1) for u, rows in bounds.items()}
+    table = pa.Table.from_pandas(df[schema.names], schema=schema, preserve_index=False)
+    return table, index
+
+
+def add_eth(table, eth, eth_index):
+    """table (whole users) with the ETH rows of its users, each user's rows in block order."""
+    users = pc.unique(pc.utf8_lower(table.column("user"))).to_pylist()  # in order of appearance
+    parts = []
+    for u in users:
+        if u in eth_index:
+            start, end = eth_index[u]
+            parts.append(eth.slice(start, end - start))
+    if not parts:
+        return table
+    table = pa.concat_tables([table, *parts])
+    rank = pc.index_in(pc.utf8_lower(table.column("user")), pa.array(users))
+    order = pc.sort_indices(pa.table({"r": rank, "b": table.column("block_number")}),
+                            sort_keys=[("r", "ascending"), ("b", "ascending")])  # stable
+    return table.take(order)
 
 
 def trace_chunk(table, seen, supplies, reserve_symbols):
@@ -200,6 +266,8 @@ def trace_chunk(table, seen, supplies, reserve_symbols):
         s = slice(start, end)
         user_supplies = supplies.get(user, {})
         symbols = {**reserve_symbols, **dict(zip(token[s], symbol[s]))}
+        if WETH.lower() in symbols:
+            symbols[WETH.lower()] = "WETH+ETH"  # one ledger entry for both
         debt = {t for t, sym in symbols.items() if (sym or "").startswith(DEBT_PREFIXES)}
         f, ledger, contributions = trace_user(user, tx_hash[s], src[s], dst[s], token[s], amount[s],
                                               tracked[s], user_supplies, debt)
@@ -214,18 +282,23 @@ def trace_chunk(table, seen, supplies, reserve_symbols):
 
 def main():
     fs = s3fs.S3FileSystem()  # endpoint and credentials come from Onyxia's AWS_* env vars
-    supplies, reserve_symbols, last_block = load_supplies(fs)
+    supplies, reserve_symbols, last_block, aave_txs = load_events(fs)
+    skip = cut_eth_users(fs)
     seen, ledger_rows, original_rows = set(), [], []
-    n_rows = n_kept = n_forced = n_missing = 0
+    n_rows = n_kept = n_forced = n_missing = n_eth_kept = 0
     tmp_file = f"{OUT_FILE}.tmp"  # OUT_FILE is replaced only once complete
 
     with fs.open(INPUT_FILE, "rb") as src_file, fs.open(tmp_file, "wb") as out_file:
         reader = pq.ParquetFile(src_file)
+        eth, eth_index = load_eth(fs, reader.schema_arrow, last_block, aave_txs, skip)
+        print(f"{eth.num_rows:,} ETH rows for {len(eth_index):,} users, "
+              f"{len(skip)} users skipped (ETH history cut)", flush=True)
         writer = None
         pending = None
 
         def process(table):
-            nonlocal writer, n_rows, n_kept, n_forced, n_missing
+            nonlocal writer, n_rows, n_kept, n_forced, n_missing, n_eth_kept
+            table = add_eth(table, eth, eth_index)
             fractions, ledgers, originals, missing = trace_chunk(table, seen, supplies, reserve_symbols)
             ledger_rows.extend(ledgers)
             original_rows.extend(originals)
@@ -238,12 +311,17 @@ def main():
             n_rows += len(fractions)
             n_kept += table.num_rows
             n_forced += int(pc.sum(table.column("tracked")).as_py() or 0)
+            native = pc.and_(pc.equal(table.column("token_address"), WETH),
+                             pc.equal(table.column("token_symbol"), "ETH"))
+            n_eth_kept += int(pc.sum(native).as_py() or 0)
             print(f"{n_rows:,} transfers read, {n_kept:,} kept", flush=True)
 
         for batch in reader.iter_batches(batch_size=CHUNK_ROWS):
             table = pa.Table.from_batches([batch])
             # after the last event, Aave transactions could not be recognised: dropped
             table = table.filter(pc.less_equal(table.column("block_number"), last_block))
+            table = table.filter(pc.invert(pc.is_in(pc.utf8_lower(table.column("user")),
+                                                     pa.array(sorted(skip), pa.string()))))
             if pending is not None:
                 table = pa.concat_tables([pending, table])
             if not len(table):
@@ -268,7 +346,7 @@ def main():
 
     print(f"\nTransfers up to block {last_block:,} (last event)")
     print(f"{len(seen):,} users, {n_kept:,} of {n_rows:,} transfers kept ({n_kept / n_rows:.1%}), "
-          f"{n_forced:,} of them forced, saved to {OUT_FILE}")
+          f"{n_forced:,} of them forced, {n_eth_kept:,} of them ETH, saved to {OUT_FILE}")
     print(f"{len(ledgers):,} ledger entries ({(ledgers['final_quantity'] > 0).sum():,} positive), "
           f"saved to {LEDGERS_FILE}")
 
