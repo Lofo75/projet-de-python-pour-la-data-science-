@@ -26,7 +26,8 @@ from dotenv import load_dotenv
 from web3 import Web3
 
 POOL_ADDRESS = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"  # Aave V3 Pool (proxy)
-START_BLOCK  = 0xF89537   # 16,291,127: Pool proxy deployment
+# START_BLOCK  = 0xF89537   # 16,291,127: Pool proxy deployment
+START_BLOCK = 0x1808580 # 25,200,000: used only for testing
 END_BLOCK    = 0x180CEED  # 25,218,797
 
 S3_ROOT      = "s3://bastienlevyguinot/aave_v3"
@@ -93,6 +94,8 @@ POOL_EVENTS_ABI = [
             {"indexed": False, "name": "receiveAToken",              "type": "bool"},
         ],
     },
+    # Fetching ReserveDataUpdated events will be useful for later analysis
+    # It won't be used in this project
     {
         "anonymous": False, "type": "event", "name": "ReserveDataUpdated",
         "inputs": [
@@ -108,8 +111,7 @@ POOL_EVENTS_ABI = [
 
 # Common columns are filled for every event; the others only for their event type.
 # "user" is the account whose position changes (onBehalfOf for Supply and Borrow).
-# "reserve"/"amount_raw" are the debt asset/amount for liquidations (debtAsset/debtToCover).
-# uint256 values are kept exact as strings in *_raw columns (convert with int()).
+# uint256 values are kept exact as strings in *_raw columns (convert with int())
 COLUMN_DTYPES = {
     "event_name":                   "string",
     "block_number":                 "Int64",
@@ -137,7 +139,7 @@ COLUMN_DTYPES = {
 }
 
 # ReserveDataUpdated: the reserve's state right after an action. Rates are yearly,
-# indexes are cumulative interest factors; all are in ray units (1e27 = 1.0).
+# indexes are cumulative interest factors; all are in ray units (1e27 = 1.0)
 RESERVE_COLUMN_DTYPES = {
     "block_number":                 "Int64",
     "tx_hash":                      "string",
@@ -167,14 +169,14 @@ def get_logs(w3, topics, from_block, to_block, max_retries=8):
             msg = str(e).lower()
             if ("block range" in msg or "response size" in msg) and to_block > from_block:
                 mid = (from_block + to_block) // 2
-                return (get_logs(w3, topics, from_block, mid)
-                        + get_logs(w3, topics, mid + 1, to_block))
+                return (get_logs(w3, topics, from_block, mid) + get_logs(w3, topics, mid + 1, to_block))
             if attempt == max_retries - 1:
                 raise RuntimeError(f"eth_getLogs failed for blocks {from_block}-{to_block}: {e}") from e
             time.sleep(min(2 ** attempt, 60))
 
 
 def decode(log, events_by_topic):
+    """Decodes log into human-readable dict, format changes in function of the event type."""
     event = events_by_topic[Web3.to_hex(log["topics"][0])]
     ev = event.process_log(log)
     a = ev["args"]
@@ -226,7 +228,6 @@ def decode(log, events_by_topic):
 
 def to_frame(rows, dtypes):
     return pd.DataFrame(rows, columns=list(dtypes)).astype(dtypes)
-
 
 def list_parts(fs, out_dir):
     """s3:// paths of the saved segments in out_dir."""
