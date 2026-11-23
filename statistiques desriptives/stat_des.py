@@ -80,3 +80,58 @@ ax.set_xlabel("Mois")
 ax.set_ylabel("Nombre d'événements")
 plt.savefig("evenements_par_mois.png", dpi=150, bbox_inches="tight")
 plt.close()
+
+
+
+
+# Tentative de reconstruction de l'expo
+
+WETH = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+DERNIER_MOIS = pd.Period("2026-05", freq="M")   # fin des données
+flux["user_l"] = flux["user"].str.lower()        # une seule fois, pour retrouver vite un user
+
+
+def portefeuille(adresse):
+    adresse = adresse.lower()
+    f = flux[flux["user_l"] == adresse].copy()     # les lignes de ce user seulement
+    f["token"] = f["token_address"].str.lower()    # ETH et WETH : même adresse, un seul solde
+    f["ordre_tx"] = f.groupby("tx_hash", sort=False).ngroup()   # n° de transaction, dans l'ordre du fichier
+
+    # chaque ligne devient un mouvement : - montant entier si envoyé, + part tracée si reçu
+    sorties = f[f["from"].str.lower() == adresse].assign(mouvement=-f["montant"], sens=0)
+    entrees = f[f["to"].str.lower() == adresse].assign(mouvement=f["traced_fraction"] * f["montant"], sens=1)
+    m = pd.concat([sorties, entrees]).sort_values(["token", "ordre_tx", "sens"])
+
+    # solde par token, sans jamais descendre sous 0
+    cumul = m.groupby("token")["mouvement"].cumsum()
+    m["solde"] = cumul - cumul.groupby(m["token"]).cummin().clip(upper=0)
+
+    # photo à la fin de chaque mois, mois sans activité recopiés du précédent
+    m["mois"] = m["date"].dt.to_period("M")
+    tableau = m.groupby(["mois", "token"])["solde"].last().unstack()
+    tableau = tableau.reindex(pd.period_range(tableau.index.min(), DERNIER_MOIS, freq="M")).ffill().fillna(0)
+
+    # noms lisibles, tokens jamais détenus retirés, dettes en négatif
+    noms = m.drop_duplicates("token").set_index("token")["token_symbol"]
+    noms[WETH] = "ETH+WETH"
+    tableau = tableau.loc[:, (tableau > 1e-9).any()].rename(columns=noms)
+    dettes = tableau.columns.str.startswith(("variableDebt", "stableDebt"))
+    tableau.loc[:, dettes] = -tableau.loc[:, dettes]
+    return tableau
+
+
+def tracer_portefeuille(adresse, nb_tokens=8):
+    tableau = portefeuille(adresse)
+    principaux = (tableau.abs() > 1e-9).sum().sort_values(ascending=False).index[:nb_tokens]
+    axes = tableau[principaux].plot(subplots=True, sharex=True, legend=False,
+                                    figsize=(10, 2 * len(principaux)))
+    for ax, nom in zip(axes, principaux):
+        ax.set_ylabel(nom, rotation=0, ha="right")
+    axes[0].set_title(f"Portefeuille tracé de {adresse[:10]}…")
+    plt.savefig(f"portefeuille_{adresse[:10]}.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+
+exemple = "0x7FA5195595EFE0dFbc79f03303448af3FbE4ea91"
+print(portefeuille(exemple).round(4))
+tracer_portefeuille(exemple)
