@@ -31,7 +31,7 @@ END_BLOCK    = 0x180CEED  # 25,218,797
 
 S3_ROOT      = "s3://bastienlevyguinot/aave_v3"
 OUT_DIR      = f"{S3_ROOT}/aave_v3_events_parts"
-OUT_FILE     = f"{S3_ROOT}/aave_v3_events.parquet"
+OUT_FILE     = "s3://bastienlevyguinot/diffusion/aave_v3_events.parquet"
 RESERVE_DIR  = f"{S3_ROOT}/aave_v3_reserve_parts"
 RESERVE_FILE = f"{S3_ROOT}/aave_v3_reserve_data.parquet"
 
