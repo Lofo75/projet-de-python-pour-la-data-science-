@@ -10,6 +10,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import requests
 import s3fs
+from dotenv import load_dotenv
 
 ETHERSCAN_BASE_URL = "https://api.etherscan.io/v2/api"
 ETH_CHAIN_ID = 1
@@ -166,9 +167,10 @@ def merge_parts(fs, prefix, n_batches, schema, out_file):
 
 
 def main():
+    load_dotenv()
     api_key = os.environ.get("ETHERSCAN_KEY", "").strip()
     if not api_key:
-        raise SystemExit("ETHERSCAN_KEY is not set: add it as an Onyxia secret and restart the service")
+        raise SystemExit("ETHERSCAN_KEY is not set: put it in .env or add it as an Onyxia secret")
 
     session = requests.Session()
     limiter = RateLimiter(CALLS_PER_SEC)
