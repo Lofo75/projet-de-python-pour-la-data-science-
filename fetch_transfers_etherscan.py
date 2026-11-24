@@ -1,32 +1,3 @@
-"""
-Fetch every ERC-20 transfer (sent and received) of each Aave V3 user with the
-Etherscan V2 API (module=account, action=tokentx) and save them to a single
-Parquet file on the Onyxia S3 (MinIO) storage.
-
-Users are the unique "user" addresses of EVENTS_FILE, except the null address
-(mint/burn counterparty, not a wallet). They are processed in
-batches of BATCH_SIZE addresses, each saved as one Parquet part under OUT_DIR
-(with a "user" column), so an interrupted run resumes after the last saved
-batch. Once every batch is fetched they are merged into OUT_FILE.
-
-Etherscan returns at most 1,000 rows per call. When an address has more, the
-rows of the last (possibly incomplete) block are dropped and the next call
-starts from that block, until the whole range is covered. A single block with
-1,000+ rows is paged through on its own (up to 10,000 rows). An address is
-cut after MAX_CALLS_PER_USER calls (only its earliest transfers are kept), so
-that contracts and bots with millions of transfers don't block the run.
-
-A transfer between two Aave users appears twice, once for each user.
-
-The Etherscan key is read from the ETHERSCAN_API_KEY environment variable
-(an Onyxia secret, not the .env file). S3 credentials and endpoint are read
-from the AWS_* environment variables that Onyxia injects into the service.
-
-All settings are the constants below. Usage:
-    python3 fetch_transfers_etherscan.py            # full run (resumes automatically)
-    python3 fetch_transfers_etherscan.py --test 20  # fetch 20 users, print stats, save nothing
-"""
-import argparse
 import os
 import random
 import re
@@ -47,16 +18,15 @@ START_BLOCK  = 16_496_817  # first Aave V3 Pool event
 EVENTS_FILE = "s3://bastienlevyguinot/aave_v3/aave_v3_events.parquet"
 OUT_DIR     = "s3://bastienlevyguinot/aave_v3/transfers_parts"
 OUT_FILE    = "s3://bastienlevyguinot/diffusion/transfers.parquet"
+SKIPPED_FILE = "s3://bastienlevyguinot/diffusion/skipped_users_during_transfers_fetching.parquet"
 
 BATCH_SIZE    = 1_000   # users per saved Parquet part
-MAX_ROWS      = 1_000   # Etherscan cap on rows per call
-MAX_WINDOW    = 10_000  # Etherscan cap on page * offset for one query
+MAX_ROWS      = 1_000   # rows per call
 CALLS_PER_SEC = 2.8     # free plan: 3 calls/s, keep a margin
 WORKERS       = 4       # parallel calls (the rate limiter is shared)
-MAX_CALLS_PER_USER = 20 # contracts/bots (burn address, DEX pools, MEV) have millions of transfers: keep the first ~20,000
+MAX_CALLS_PER_USER = 20 # contracts/bots (burn address, DEX pools, MEV) have millions of transfers:
+                        # an address still truncated after 20 calls (~20,000 transfers) is skipped
 
-# Etherscan field -> column name (snake_case, as in aave_v3_events.parquet).
-# value is kept exact as a string (divide by 10**token_decimal for token units).
 FIELDS = {
     "blockNumber":      "block_number",
     "timeStamp":        "timestamp",
@@ -80,17 +50,24 @@ SCHEMA = pa.schema([
     ("token_symbol",   pa.string()),
     ("token_name",     pa.string()),
     ("token_decimal",  pa.int64()),
-    ("value",          pa.string()),
+    ("value",          pa.string()), # value is kept exact as a string (divide by 10**token_decimal for token units)
 ])
 INT_COLUMNS = [f.name for f in SCHEMA if f.type == pa.int64()]
 
-NULL_ADDRESS = "0x0000000000000000000000000000000000000000"
+# Addresses with no transfer saved, so that they are not mistaken for users with zero transfers.
+# reason: "too_many_transfers" (still truncated after MAX_CALLS_PER_USER calls)
+#      or "big_block" (MAX_ROWS+ transfers in a single block)
+SKIPPED_SCHEMA = pa.schema([
+    ("user",           pa.string()),
+    ("reason",         pa.string()),
+    ("transfers_seen", pa.int64()),  # complete-block transfers fetched before giving up
+    ("block_reached",  pa.int64()),  # block where the fetching stopped
+])
 
-BATCH_RE = re.compile(r"batch_(\d+)\.parquet$")
+NULL_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 
 class RateLimiter:
-    """Spaces calls at least 1 / calls_per_sec apart, across all threads."""
 
     def __init__(self, calls_per_sec):
         self.interval = 1 / calls_per_sec
@@ -107,7 +84,7 @@ class RateLimiter:
 
 
 def call(session, limiter, api_key, params, max_retries=10):
-    """One Etherscan call with backoff on rate limits and errors; waits out the daily quota."""
+    """One Etherscan call with backoff on rate limits and errors"""
     params = {"chainid": ETH_CHAIN_ID, "apikey": api_key, **params}
     attempt = 0
     while True:
@@ -137,24 +114,10 @@ def call(session, limiter, api_key, params, max_retries=10):
         time.sleep(min(2 ** attempt, 60) * random.uniform(0.5, 1.5))
 
 
-def fetch_block(session, limiter, api_key, user, block):
-    """All ERC-20 transfers of one address in one block, using pagination (capped at MAX_WINDOW rows)."""
-    rows = []
-    for page in range(1, MAX_WINDOW // MAX_ROWS + 1):
-        result = call(session, limiter, api_key, {
-            "module": "account", "action": "tokentx", "address": user,
-            "startblock": block, "endblock": block,
-            "page": page, "offset": MAX_ROWS, "sort": "asc",
-        })
-        rows += result
-        if len(result) < MAX_ROWS:
-            return rows
-    print(f"Warning: {user} has >= {MAX_WINDOW} transfers in block {block}, some are missing", flush=True)
-    return rows
-
-
 def fetch_user(session, limiter, api_key, user, end_block):
-    """All ERC-20 transfers of one address between START_BLOCK and end_block."""
+    """All ERC-20 transfers of one address between START_BLOCK and end_block.
+    Returns (rows, None) when the address is complete, or ([], skip) when it is skipped: an address is either complete or absent, never partial.
+    """
     rows = []
     start = START_BLOCK
     for _ in range(MAX_CALLS_PER_USER):
@@ -165,51 +128,44 @@ def fetch_user(session, limiter, api_key, user, end_block):
         })
         if len(result) < MAX_ROWS:
             rows += result
-            break
+            return [{"user": user, **{col: t.get(field) for field, col in FIELDS.items()}} for t in rows], None
         # Truncated: keep the complete blocks, start again from the last one
         last = int(result[-1]["blockNumber"])
         complete = [t for t in result if int(t["blockNumber"]) < last]
-        if not complete:  # a single block with MAX_ROWS transfers: page through that block alone
-            rows += fetch_block(session, limiter, api_key, user, last)
-            start = last + 1
-        else:
-            rows += complete
-            start = last
-    else:
-        print(f"Warning: {user} truncated at block {start:,} ({len(rows):,} transfers kept)", flush=True)
-    return [{"user": user, **{col: t.get(field) for field, col in FIELDS.items()}} for t in rows]
+        if not complete:  # MAX_ROWS+ transfers in a single block: a contract, not a wallet
+            return [], {"user": user, "reason": "big_block", "transfers_seen": len(rows), "block_reached": last}
+        rows += complete
+        start = last
+    return [], {"user": user, "reason": "too_many_transfers", "transfers_seen": len(rows), "block_reached": start}
 
 
 def to_table(rows):
     df = pd.DataFrame(rows, columns=SCHEMA.names)
     for col in INT_COLUMNS:
-        df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")  # "" -> NA
+        df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
     return pa.Table.from_pandas(df, schema=SCHEMA, preserve_index=False)
 
 
-def done_batches(fs):
-    """Indexes of the batches already saved in OUT_DIR."""
+def saved_parts(fs, prefix):
+    """Indexes of the parts <prefix>_XXXXX.parquet already saved in OUT_DIR."""
     fs.invalidate_cache(OUT_DIR)
-    return {int(m.group(1)) for p in fs.glob(f"{OUT_DIR}/batch_*.parquet") if (m := BATCH_RE.search(p))}
+    pattern = re.compile(rf"{prefix}_(\d+)\.parquet$")
+    return {int(m.group(1)) for p in fs.glob(f"{OUT_DIR}/{prefix}_*.parquet") if (m := pattern.search(p))}
 
 
-def merge_batches(fs, n_batches):
-    """Concatenate the batches into OUT_FILE one at a time, to keep memory low."""
+def merge_parts(fs, prefix, n_batches, schema, out_file):
+    """Concatenate the parts into out_file one at a time, to keep memory low."""
     n_rows = 0
-    with fs.open(OUT_FILE, "wb") as f, pq.ParquetWriter(f, SCHEMA) as writer:
+    with fs.open(out_file, "wb") as f, pq.ParquetWriter(f, schema) as writer:
         for i in range(n_batches):
-            with fs.open(f"{OUT_DIR}/batch_{i:05d}.parquet", "rb") as part:
-                table = pq.read_table(part, schema=SCHEMA)
+            with fs.open(f"{OUT_DIR}/{prefix}_{i:05d}.parquet", "rb") as part:
+                table = pq.read_table(part, schema=schema)
             writer.write_table(table)
             n_rows += table.num_rows
     return n_rows
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--test", type=int, metavar="N", help="fetch only N users and save nothing")
-    args = parser.parse_args()
-
     api_key = os.environ.get("ETHERSCAN_KEY", "").strip()
     if not api_key:
         raise SystemExit("ETHERSCAN_KEY is not set: add it as an Onyxia secret and restart the service")
@@ -225,42 +181,40 @@ def main():
     def fetch(user):
         return fetch_user(session, limiter, api_key, user, end_block)
 
-    if args.test:
-        t0 = time.time()
-        with ThreadPoolExecutor(max_workers=WORKERS) as executor:
-            rows = [r for batch in executor.map(fetch, users[:args.test]) for r in batch]
-        elapsed = time.time() - t0
-        df = to_table(rows).to_pandas()
-        print(df.groupby("user").size().describe().to_string())
-        print(df.head().to_string())
-        print(f"{len(df):,} transfers for {args.test} users in {elapsed:.1f} s "
-              f"-> full run ETA {elapsed / args.test * len(users) / 3600:.1f} h")
-        return
-
     fs = s3fs.S3FileSystem()  # endpoint and credentials come from Onyxia's AWS_* env vars
     batches = [users[i:i + BATCH_SIZE] for i in range(0, len(users), BATCH_SIZE)]
-    done = done_batches(fs)
+    # A batch is done only if both its parts exist: batches saved by an older version
+    # of this script (no skipped part, truncated users inside) are fetched again.
+    done = saved_parts(fs, "batch") & saved_parts(fs, "skipped")
     todo = [i for i in range(len(batches)) if i not in done]
     if done:
         print(f"Resuming: {len(done)} of {len(batches)} batches already saved")
 
-    n_transfers = 0
+    n_transfers = n_skipped = 0
     t0 = time.time()
     with ThreadPoolExecutor(max_workers=WORKERS) as executor:
         for k, i in enumerate(todo, 1):
-            rows = [r for batch in executor.map(fetch, batches[i]) for r in batch]
-            table = to_table(rows)
+            results = list(executor.map(fetch, batches[i]))
+            table = to_table([r for user_rows, _ in results for r in user_rows])
+            skipped = pa.Table.from_pylist([s for _, s in results if s], schema=SKIPPED_SCHEMA)
+            # skipped part first: the batch part marks the batch as done
+            with fs.open(f"{OUT_DIR}/skipped_{i:05d}.parquet", "wb") as f:
+                pq.write_table(skipped, f)
             with fs.open(f"{OUT_DIR}/batch_{i:05d}.parquet", "wb") as f:
                 pq.write_table(table, f)
 
             n_transfers += table.num_rows
+            n_skipped += skipped.num_rows
             elapsed = time.time() - t0
             eta_h = elapsed / k * (len(todo) - k) / 3600
             print(f"[{(len(done) + k) / len(batches):6.1%}] batch {i:05d} | "
-                  f"{table.num_rows:7,d} transfers (total {n_transfers:,}) | ETA {eta_h:.1f} h", flush=True)
+                  f"{table.num_rows:7,d} transfers (total {n_transfers:,}) | "
+                  f"{skipped.num_rows:3d} skipped (total {n_skipped:,}) | ETA {eta_h:.1f} h", flush=True)
 
-    n_rows = merge_batches(fs, len(batches))
+    n_rows = merge_parts(fs, "batch", len(batches), SCHEMA, OUT_FILE)
     print(f"Saved {n_rows:,} transfers to {OUT_FILE}")
+    n_rows = merge_parts(fs, "skipped", len(batches), SKIPPED_SCHEMA, SKIPPED_FILE)
+    print(f"Saved {n_rows:,} skipped users to {SKIPPED_FILE}")
 
 
 if __name__ == "__main__":
