@@ -183,8 +183,6 @@ def main():
 
     fs = s3fs.S3FileSystem()  # endpoint and credentials come from Onyxia's AWS_* env vars
     batches = [users[i:i + BATCH_SIZE] for i in range(0, len(users), BATCH_SIZE)]
-    # A batch is done only if both its parts exist: batches saved by an older version
-    # of this script (no skipped part, truncated users inside) are fetched again.
     done = saved_parts(fs, "batch") & saved_parts(fs, "skipped")
     todo = [i for i in range(len(batches)) if i not in done]
     if done:
@@ -197,7 +195,6 @@ def main():
             results = list(executor.map(fetch, batches[i]))
             table = to_table([r for user_rows, _ in results for r in user_rows])
             skipped = pa.Table.from_pylist([s for _, s in results if s], schema=SKIPPED_SCHEMA)
-            # skipped part first: the batch part marks the batch as done
             with fs.open(f"{OUT_DIR}/skipped_{i:05d}.parquet", "wb") as f:
                 pq.write_table(skipped, f)
             with fs.open(f"{OUT_DIR}/batch_{i:05d}.parquet", "wb") as f:
