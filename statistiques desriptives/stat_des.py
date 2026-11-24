@@ -135,3 +135,66 @@ def tracer_portefeuille(adresse, nb_tokens=8):
 exemple = "0x7FA5195595EFE0dFbc79f03303448af3FbE4ea91"
 print(portefeuille(exemple).round(4))
 tracer_portefeuille(exemple)
+
+
+#exposition agrégée de tous les utilisateurs 
+# ÉTAPE A (globale) : solde tracé de chaque user, token par token, après chaque transaction
+
+f = flux.copy()
+f["user_l"] = f["user"].str.lower()
+f["token"]  = f["token_address"].str.lower()      # ETH et WETH : même adresse, un seul solde
+f["ordre_tx"] = f.groupby(["user_l", "tx_hash"], sort=False).ngroup()   # n° de transaction, ordre du fichier
+
+# un mouvement par sens : - montant entier si envoyé, + part tracée si reçu
+sorties = f[f["from"].str.lower() == f["user_l"]].assign(mouvement=-f["montant"], sens=0)
+entrees = f[f["to"].str.lower() == f["user_l"]].assign(mouvement=f["traced_fraction"] * f["montant"], sens=1)
+mvts = pd.concat([sorties, entrees]).sort_values(["user_l", "token", "ordre_tx", "sens"])
+del f, sorties, entrees                           # libère la mémoire
+
+# solde par (user, token), sans jamais descendre sous 0
+cumul = mvts.groupby(["user_l", "token"])["mouvement"].cumsum()
+mvts["solde"] = cumul - cumul.groupby([mvts["user_l"], mvts["token"]]).cummin().clip(upper=0)
+
+print("solde minimum (doit être >= 0) :", mvts["solde"].min())
+
+
+
+
+
+# EXPOSITION AGRÉGÉE : total de chaque token détenu par l'ensemble des users, mois par mois
+# (nécessite mvts de l'étape A globale, avec la colonne "solde")
+# EXPOSITION AGRÉGÉE : total de chaque monnaie dans tous les portefeuilles, mois par mois
+# (nécessite mvts de l'étape A globale)
+
+MONNAIES = {
+    "USDC":     "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "USDT":     "0xdac17f958d2ee523a2206206994597c13d831ec7",
+    "DAI":      "0x6b175474e89094c44da98b954eedeac495271d0f",
+    "ETH+WETH": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "WBTC":     "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+}
+DERNIER_MOIS = pd.Period("2026-05", freq="M")
+
+# on ne garde que les mouvements de ces monnaies
+m = mvts[mvts["token"].isin(MONNAIES.values())].copy()
+m["mois"] = m["date"].dt.to_period("M")
+
+# de combien le solde de chaque user a bougé à chaque mouvement
+m["variation"] = m.groupby(["user_l", "token"])["solde"].diff().fillna(m["solde"])
+
+# on additionne les variations de tous les users par mois, puis on cumule dans le temps
+total = m.groupby(["mois", "token"])["variation"].sum().unstack(fill_value=0)
+tous_les_mois = pd.period_range(total.index.min(), DERNIER_MOIS, freq="M")
+total = total.reindex(tous_les_mois, fill_value=0).cumsum()
+total = total.rename(columns={adresse: nom for nom, adresse in MONNAIES.items()})
+
+print(total.shape)          # (nombre de mois, nombre de monnaies)
+print(total.round(0))
+
+axes = total.plot(subplots=True, sharex=True, legend=False, figsize=(10, 2 * len(MONNAIES)))
+for ax, nom in zip(axes, total.columns):
+    ax.set_ylabel(nom, rotation=0, ha="right")
+axes[0].set_title("Quantité totale détenue grâce à Aave, tous users confondus")
+plt.savefig("exposition_agregee.png", dpi=150, bbox_inches="tight")
+plt.close()
+
