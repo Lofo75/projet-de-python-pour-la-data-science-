@@ -1,20 +1,3 @@
-"""
-Fetch Aave V3 (Ethereum main market) events between two blocks with web3.py and
-save them to Parquet on the Onyxia S3 (MinIO) storage:
-  - user actions (Supply, Withdraw, Borrow, Repay, LiquidationCall) -> OUT_FILE
-  - reserve state updates (ReserveDataUpdated: rates and indexes)   -> RESERVE_FILE
-
-The Alchemy free plan caps eth_getLogs at 10 blocks per request, so the range
-is split into small chunks fetched in parallel. Results are written in segments
-under OUT_DIR and RESERVE_DIR, so an interrupted run resumes where it stopped.
-Once every segment is fetched they are merged into OUT_FILE and RESERVE_FILE.
-
-S3 credentials and endpoint are read from the AWS_* environment variables that
-Onyxia injects into the service, so no extra configuration is needed.
-
-All settings are the constants below. Usage:
-    python3 fetch_borrow_repay_w3.py
-"""
 import os
 import re
 import time
@@ -28,7 +11,7 @@ from web3 import Web3
 POOL_ADDRESS = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"  # Aave V3 Pool (proxy)
 # START_BLOCK  = 0xF89537   # 16,291,127: Pool proxy deployment
 START_BLOCK = 0x1808580 # 25,200,000: used only for testing
-END_BLOCK    = 0x180CEED  # 25,218,797
+END_BLOCK = 0x180CEED  # 25,218,797
 
 S3_ROOT      = "s3://bastienlevyguinot/aave_v3"
 OUT_DIR      = f"{S3_ROOT}/aave_v3_events_parts"
@@ -234,7 +217,6 @@ def list_parts(fs, out_dir):
     fs.invalidate_cache(out_dir)
     return sorted(f"s3://{p}" for p in fs.glob(f"{out_dir}/part_*.parquet"))
 
-
 def resume_block(fs, out_dir, start):
     """First block not yet covered by a saved segment."""
     ends = [int(m.group(2)) for p in list_parts(fs, out_dir) if (m := PART_RE.search(p))]
@@ -242,6 +224,7 @@ def resume_block(fs, out_dir, start):
 
 
 def merge_parts(fs, out_dir, start, end, out_file):
+    """from parts files to parquet in diffusion"""
     parts = [
         p for p in list_parts(fs, out_dir)
         if (m := PART_RE.search(p)) and int(m.group(1)) >= start and int(m.group(2)) <= end
@@ -267,7 +250,6 @@ def main():
     topics = list(events_by_topic)
 
     fs = s3fs.S3FileSystem()  # endpoint and credentials come from Onyxia's AWS_* env vars
-    # Resume from the folder that is furthest behind, so both tables cover the same blocks
     first = min(resume_block(fs, OUT_DIR, START_BLOCK), resume_block(fs, RESERVE_DIR, START_BLOCK))
     if first > START_BLOCK:
         print(f"Resuming from block {first:,}")
@@ -281,9 +263,8 @@ def main():
             seg_end = min(seg_start + SEGMENT_SIZE - 1, end)
             chunks = [(a, min(a + CHUNK_SIZE - 1, seg_end))
                       for a in range(seg_start, seg_end + 1, CHUNK_SIZE)]
-            logs = [log for batch in executor.map(lambda c: get_logs(w3, topics, *c), chunks)
-                    for log in batch]
-
+            
+            logs = [log for batch in executor.map(lambda c: get_logs(w3, topics, *c), chunks) for log in batch]
             rows = [decode(log, events_by_topic) for log in logs]
             events_df  = to_frame([r for r in rows if r["event_name"] != "ReserveDataUpdated"], COLUMN_DTYPES)
             reserve_df = to_frame([r for r in rows if r["event_name"] == "ReserveDataUpdated"], RESERVE_COLUMN_DTYPES)
