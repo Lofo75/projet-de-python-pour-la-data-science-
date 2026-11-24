@@ -1,0 +1,1254 @@
+{
+  "ETH": {
+    "family": "ETH",
+    "note": "ETH ou enveloppe WETH ; ETH/WETH déjà fusionnés dans ce fichier.",
+    "token_kind": "spot"
+  },
+  "WETH": {
+    "family": "ETH",
+    "note": "ETH ou enveloppe WETH ; ETH/WETH déjà fusionnés dans ce fichier.",
+    "token_kind": "spot"
+  },
+  "STETH": {
+    "family": "ETH",
+    "note": "Droit lié à ETH staké ; taux de conversion et risque de décrochage à conserver.",
+    "token_kind": "staking_receipt"
+  },
+  "WSTETH": {
+    "family": "ETH",
+    "note": "Droit lié à ETH staké ; taux de conversion et risque de décrochage à conserver.",
+    "token_kind": "staking_receipt",
+    "mechanism_source": "https://docs.lido.fi/contracts/wsteth/"
+  },
+  "RETH": {
+    "family": "ETH",
+    "note": "Droit lié à ETH staké ; taux de conversion et risque de décrochage à conserver.",
+    "token_kind": "staking_receipt"
+  },
+  "CBETH": {
+    "family": "ETH",
+    "note": "Droit lié à ETH staké ; taux de conversion et risque de décrochage à conserver.",
+    "token_kind": "staking_receipt"
+  },
+  "ETHX": {
+    "family": "ETH",
+    "note": "Droit lié à ETH staké ; taux de conversion et risque de décrochage à conserver.",
+    "token_kind": "staking_receipt"
+  },
+  "OSETH": {
+    "family": "ETH",
+    "note": "Droit lié à ETH staké ; taux de conversion et risque de décrochage à conserver.",
+    "token_kind": "staking_receipt"
+  },
+  "FRXETH": {
+    "family": "ETH",
+    "note": "Droit lié à ETH staké ; taux de conversion et risque de décrochage à conserver.",
+    "token_kind": "staking_receipt"
+  },
+  "SFRXETH": {
+    "family": "ETH",
+    "note": "Droit lié à ETH staké ; taux de conversion et risque de décrochage à conserver.",
+    "token_kind": "staking_receipt"
+  },
+  "SWETH": {
+    "family": "ETH",
+    "note": "Droit lié à ETH staké ; taux de conversion et risque de décrochage à conserver.",
+    "token_kind": "staking_receipt"
+  },
+  "METH": {
+    "family": "ETH",
+    "note": "Droit lié à ETH staké ; taux de conversion et risque de décrochage à conserver.",
+    "token_kind": "staking_receipt"
+  },
+  "ANKRETH": {
+    "family": "ETH",
+    "note": "Droit lié à ETH staké ; taux de conversion et risque de décrochage à conserver.",
+    "token_kind": "staking_receipt"
+  },
+  "EETH": {
+    "family": "ETH",
+    "note": "ETH placé en staking/restaking ; même référence ETH, mécanisme et risques propres.",
+    "token_kind": "restaking_receipt"
+  },
+  "WEETH": {
+    "family": "ETH",
+    "note": "ETH placé en staking/restaking ; même référence ETH, mécanisme et risques propres.",
+    "token_kind": "restaking_receipt"
+  },
+  "RSETH": {
+    "family": "ETH",
+    "note": "ETH placé en staking/restaking ; même référence ETH, mécanisme et risques propres.",
+    "token_kind": "restaking_receipt"
+  },
+  "EZETH": {
+    "family": "ETH",
+    "note": "ETH placé en staking/restaking ; même référence ETH, mécanisme et risques propres.",
+    "token_kind": "restaking_receipt"
+  },
+  "PUFETH": {
+    "family": "ETH",
+    "note": "ETH placé en staking/restaking ; même référence ETH, mécanisme et risques propres.",
+    "token_kind": "restaking_receipt"
+  },
+  "RSWETH": {
+    "family": "ETH",
+    "note": "ETH placé en staking/restaking ; même référence ETH, mécanisme et risques propres.",
+    "token_kind": "restaking_receipt"
+  },
+  "TETH": {
+    "family": "ETH",
+    "note": "Part de stratégie liée à ETH ; conversion et stratégie à vérifier.",
+    "token_kind": "vault_share"
+  },
+  "LIQUIDETH": {
+    "family": "ETH",
+    "note": "Part de stratégie liée à ETH ; conversion et stratégie à vérifier.",
+    "token_kind": "vault_share"
+  },
+  "BTC": {
+    "family": "BTC",
+    "note": "Représentation de BTC ; dépositaire/pont et conversion à vérifier.",
+    "token_kind": "wrapped_asset"
+  },
+  "WBTC": {
+    "family": "BTC",
+    "note": "Représentation de BTC ; dépositaire/pont et conversion à vérifier.",
+    "token_kind": "wrapped_asset"
+  },
+  "CBBTC": {
+    "family": "BTC",
+    "note": "Représentation de BTC ; dépositaire/pont et conversion à vérifier.",
+    "token_kind": "wrapped_asset"
+  },
+  "TBTC": {
+    "family": "BTC",
+    "note": "Représentation de BTC ; dépositaire/pont et conversion à vérifier.",
+    "token_kind": "wrapped_asset"
+  },
+  "FBTC": {
+    "family": "BTC",
+    "note": "Représentation de BTC ; dépositaire/pont et conversion à vérifier.",
+    "token_kind": "wrapped_asset"
+  },
+  "BTCB": {
+    "family": "BTC",
+    "note": "Représentation de BTC ; dépositaire/pont et conversion à vérifier.",
+    "token_kind": "wrapped_asset"
+  },
+  "CIRBTC": {
+    "family": "BTC",
+    "note": "Représentation de BTC ; dépositaire/pont et conversion à vérifier.",
+    "token_kind": "wrapped_asset"
+  },
+  "LBTC": {
+    "family": "BTC",
+    "note": "Produit lié à BTC ; rendement, pont ou stratégie à vérifier.",
+    "token_kind": "yield_receipt"
+  },
+  "EBTC": {
+    "family": "BTC",
+    "note": "Produit lié à BTC ; rendement, pont ou stratégie à vérifier.",
+    "token_kind": "yield_receipt"
+  },
+  "LBTCV": {
+    "family": "BTC",
+    "note": "Produit lié à BTC ; rendement, pont ou stratégie à vérifier.",
+    "token_kind": "yield_receipt"
+  },
+  "SOLVBTC": {
+    "family": "BTC",
+    "note": "Produit lié à BTC ; rendement, pont ou stratégie à vérifier.",
+    "token_kind": "yield_receipt"
+  },
+  "RENBTC": {
+    "family": "BTC",
+    "note": "Ancienne représentation de BTC : fonctionnement et décrochage historique à vérifier.",
+    "token_kind": "legacy_wrapper"
+  },
+  "HBTC": {
+    "family": "BTC",
+    "note": "Ancienne représentation de BTC : fonctionnement et décrochage historique à vérifier.",
+    "token_kind": "legacy_wrapper"
+  },
+  "IMBTC": {
+    "family": "BTC",
+    "note": "Ancienne représentation de BTC : fonctionnement et décrochage historique à vérifier.",
+    "token_kind": "legacy_wrapper"
+  },
+  "USD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USDC": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USDT": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "DAI": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin",
+    "mechanism_source": "https://makerdao.com/en/whitepaper/"
+  },
+  "USDS": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin",
+    "mechanism_source": "https://developers.skyeco.com/protocol/tokens/usds/"
+  },
+  "GHO": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin",
+    "mechanism_source": "https://aave.com/docs/ecosystem/gho"
+  },
+  "LUSD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "FRAX": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin",
+    "mechanism_source": "https://docs.frax.finance/"
+  },
+  "FRXUSD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "CRVUSD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "PYUSD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "RLUSD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USDG": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USDP": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "TUSD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "GUSD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USDE": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USDTB": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "MUSD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USR": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin",
+    "mechanism_source": "https://docs.resolv.xyz/litepaper"
+  },
+  "DOLA": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin",
+    "mechanism_source": "https://docs.inverse.finance/inverse-finance"
+  },
+  "BOLD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin",
+    "mechanism_source": "https://docs.liquity.org/v2-faq/bold-and-earn"
+  },
+  "MIM": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin",
+    "mechanism_source": "https://docs.abracadabra.money/learn/tokens/tokenomics"
+  },
+  "ALUSD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USDD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USD0": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USDF": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "MKUSD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "REUSD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USDO": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "CUSD": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USN": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USDB": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USDC.E": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "USDT.E": {
+    "family": "USD",
+    "note": "Objectif de référence USD ; ne garantit ni un prix de 1 USD ni une absence de risque.",
+    "token_kind": "stablecoin"
+  },
+  "BUSD": {
+    "family": "USD",
+    "note": "Référence USD historique ; vérifier fonctionnement et prix sur la période.",
+    "token_kind": "legacy_stablecoin"
+  },
+  "FEI": {
+    "family": "USD",
+    "note": "Référence USD historique ; vérifier fonctionnement et prix sur la période.",
+    "token_kind": "legacy_stablecoin"
+  },
+  "SUSD": {
+    "family": "USD",
+    "note": "Référence USD historique ; vérifier fonctionnement et prix sur la période.",
+    "token_kind": "legacy_stablecoin"
+  },
+  "SDAI": {
+    "family": "USD",
+    "note": "Part d’épargne en actif lié au dollar ; la valeur d’une part peut dépasser 1 USD.",
+    "token_kind": "savings_receipt",
+    "mechanism_source": "https://docs.spark.fi/savings/sdai"
+  },
+  "SUSDS": {
+    "family": "USD",
+    "note": "Part d’épargne en actif lié au dollar ; la valeur d’une part peut dépasser 1 USD.",
+    "token_kind": "savings_receipt",
+    "mechanism_source": "https://developers.skyeco.com/protocol/tokens/susds/"
+  },
+  "SUSDE": {
+    "family": "USD",
+    "note": "Part d’épargne en actif lié au dollar ; la valeur d’une part peut dépasser 1 USD.",
+    "token_kind": "savings_receipt"
+  },
+  "SFRAX": {
+    "family": "USD",
+    "note": "Part d’épargne en actif lié au dollar ; la valeur d’une part peut dépasser 1 USD.",
+    "token_kind": "savings_receipt",
+    "mechanism_source": "https://docs.frax.finance/"
+  },
+  "SFRXUSD": {
+    "family": "USD",
+    "note": "Part d’épargne en actif lié au dollar ; la valeur d’une part peut dépasser 1 USD.",
+    "token_kind": "savings_receipt"
+  },
+  "SCRVUSD": {
+    "family": "USD",
+    "note": "Part d’épargne en actif lié au dollar ; la valeur d’une part peut dépasser 1 USD.",
+    "token_kind": "savings_receipt"
+  },
+  "SDOLA": {
+    "family": "USD",
+    "note": "Part d’épargne en actif lié au dollar ; la valeur d’une part peut dépasser 1 USD.",
+    "token_kind": "savings_receipt"
+  },
+  "SBOLD": {
+    "family": "USD",
+    "note": "Part d’épargne en actif lié au dollar ; la valeur d’une part peut dépasser 1 USD.",
+    "token_kind": "savings_receipt"
+  },
+  "STUSR": {
+    "family": "USD",
+    "note": "Part d’épargne en actif lié au dollar ; la valeur d’une part peut dépasser 1 USD.",
+    "token_kind": "savings_receipt"
+  },
+  "WSTUSR": {
+    "family": "USD",
+    "note": "Part d’épargne en actif lié au dollar ; la valeur d’une part peut dépasser 1 USD.",
+    "token_kind": "savings_receipt"
+  },
+  "SUSDD": {
+    "family": "USD",
+    "note": "Part d’épargne en actif lié au dollar ; la valeur d’une part peut dépasser 1 USD.",
+    "token_kind": "savings_receipt"
+  },
+  "EUSDE": {
+    "family": "USD",
+    "note": "Part de coffre/stratégie libellé en actif USD ; vérifier contrat et taux de conversion.",
+    "token_kind": "vault_share"
+  },
+  "SYRUPUSDC": {
+    "family": "USD",
+    "note": "Part de coffre/stratégie libellé en actif USD ; vérifier contrat et taux de conversion.",
+    "token_kind": "vault_share"
+  },
+  "SYRUPUSDT": {
+    "family": "USD",
+    "note": "Part de coffre/stratégie libellé en actif USD ; vérifier contrat et taux de conversion.",
+    "token_kind": "vault_share"
+  },
+  "USUALUSDC+": {
+    "family": "USD",
+    "note": "Part de coffre/stratégie libellé en actif USD ; vérifier contrat et taux de conversion.",
+    "token_kind": "vault_share"
+  },
+  "PUSDE": {
+    "family": "USD",
+    "note": "Part de coffre/stratégie libellé en actif USD ; vérifier contrat et taux de conversion.",
+    "token_kind": "vault_share"
+  },
+  "TUSDE": {
+    "family": "USD",
+    "note": "Part de coffre/stratégie libellé en actif USD ; vérifier contrat et taux de conversion.",
+    "token_kind": "vault_share"
+  },
+  "CUSDO": {
+    "family": "USD",
+    "note": "Part de coffre/stratégie libellé en actif USD ; vérifier contrat et taux de conversion.",
+    "token_kind": "vault_share"
+  },
+  "LIQUIDUSD": {
+    "family": "USD",
+    "note": "Part de coffre/stratégie libellé en actif USD ; vérifier contrat et taux de conversion.",
+    "token_kind": "vault_share"
+  },
+  "SRUSDE": {
+    "family": "USD",
+    "note": "Produit de crédit, tranche ou terme : conserver USD comme référence mais valoriser séparément.",
+    "token_kind": "structured_credit"
+  },
+  "BUSD0": {
+    "family": "USD",
+    "note": "Produit de crédit, tranche ou terme : conserver USD comme référence mais valoriser séparément.",
+    "token_kind": "structured_credit"
+  },
+  "USD0++": {
+    "family": "USD",
+    "note": "Produit de crédit, tranche ou terme : conserver USD comme référence mais valoriser séparément.",
+    "token_kind": "structured_credit"
+  },
+  "EUR": {
+    "family": "EUR",
+    "note": "Objectif de référence euro, pas dollar.",
+    "token_kind": "stablecoin"
+  },
+  "EURC": {
+    "family": "EUR",
+    "note": "Objectif de référence euro, pas dollar.",
+    "token_kind": "stablecoin",
+    "mechanism_source": "https://developers.circle.com/stablecoins/eurc-contract-addresses"
+  },
+  "EUROC": {
+    "family": "EUR",
+    "note": "Objectif de référence euro, pas dollar.",
+    "token_kind": "stablecoin"
+  },
+  "EURS": {
+    "family": "EUR",
+    "note": "Objectif de référence euro, pas dollar.",
+    "token_kind": "stablecoin"
+  },
+  "EURT": {
+    "family": "EUR",
+    "note": "Objectif de référence euro, pas dollar.",
+    "token_kind": "stablecoin"
+  },
+  "AGEUR": {
+    "family": "EUR",
+    "note": "Objectif de référence euro, pas dollar.",
+    "token_kind": "stablecoin"
+  },
+  "EURA": {
+    "family": "EUR",
+    "note": "Objectif de référence euro, pas dollar.",
+    "token_kind": "stablecoin"
+  },
+  "PAR": {
+    "family": "EUR",
+    "note": "Objectif de référence euro, pas dollar.",
+    "token_kind": "stablecoin"
+  },
+  "JEUR": {
+    "family": "EUR",
+    "note": "Objectif de référence euro, pas dollar.",
+    "token_kind": "stablecoin"
+  },
+  "EURI": {
+    "family": "EUR",
+    "note": "Objectif de référence euro, pas dollar.",
+    "token_kind": "stablecoin"
+  },
+  "ZCHF": {
+    "family": "CHF",
+    "note": "Objectif de référence franc suisse.",
+    "token_kind": "stablecoin",
+    "mechanism_source": "https://docs.frankencoin.com/"
+  },
+  "XCHF": {
+    "family": "CHF",
+    "note": "Objectif de référence franc suisse.",
+    "token_kind": "stablecoin"
+  },
+  "VCHF": {
+    "family": "CHF",
+    "note": "Objectif de référence franc suisse.",
+    "token_kind": "stablecoin"
+  },
+  "XSGD": {
+    "family": "SGD",
+    "note": "Objectif de référence dollar de Singapour ; distinct de USD.",
+    "token_kind": "stablecoin",
+    "mechanism_source": "https://www.straitsx.com/xsgd"
+  },
+  "GYEN": {
+    "family": "JPY",
+    "note": "Objectif de référence yen japonais ; distinct de USD.",
+    "token_kind": "stablecoin"
+  },
+  "CADC": {
+    "family": "CAD",
+    "note": "Objectif de référence dollar canadien ; distinct de USD.",
+    "token_kind": "stablecoin"
+  },
+  "PAXG": {
+    "family": "XAU",
+    "note": "Or : risque émetteur et poids d’or par token à conserver.",
+    "token_kind": "gold_backed",
+    "mechanism_source": "https://www.paxos.com/assets/paxg"
+  },
+  "XAUT": {
+    "family": "XAU",
+    "note": "Or : risque émetteur et poids d’or par token à conserver.",
+    "token_kind": "gold_backed"
+  },
+  "RAI": {
+    "family": "RAI",
+    "note": "Le RAI de Reflexer a une cible flottante ; ne pas le forcer dans USD. Le symbole RAI est partagé par d’autres contrats.",
+    "token_kind": "floating_stable_asset",
+    "mechanism_source": "https://reflexer.finance/faq/"
+  },
+  "AMPL": {
+    "family": "AMPL",
+    "note": "Unité et rebase propres ; ne pas l’assimiler à un stablecoin à 1 USD.",
+    "token_kind": "rebasing_asset"
+  },
+  "FPI": {
+    "family": "FPI",
+    "note": "Référence à un panier lié à l’inflation, distincte du dollar nominal.",
+    "token_kind": "inflation_index",
+    "mechanism_source": "https://docs.frax.finance/"
+  },
+  "UST": {
+    "family": "UST_LEGACY",
+    "note": "Ancien objectif USD : exclure du regroupement USD simple sur la période postérieure à 2022.",
+    "token_kind": "depegged_legacy"
+  },
+  "USTC": {
+    "family": "UST_LEGACY",
+    "note": "Ancien objectif USD : exclure du regroupement USD simple sur la période postérieure à 2022.",
+    "token_kind": "depegged_legacy"
+  },
+  "RLP": {
+    "family": "RLP",
+    "note": "Tranche qui absorbe du risque ; ne pas l’assimiler au stablecoin USR.",
+    "token_kind": "risk_tranche",
+    "mechanism_source": "https://docs.resolv.xyz/litepaper"
+  },
+  "DPI": {
+    "family": "MULTI_ASSET",
+    "note": "Indice de plusieurs actifs : composition et pondérations nécessaires.",
+    "token_kind": "basket"
+  },
+  "AAVE": {
+    "family": "AAVE",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "LINK": {
+    "family": "LINK",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "UNI": {
+    "family": "UNI",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "MKR": {
+    "family": "MKR",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "SKY": {
+    "family": "SKY",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "CRV": {
+    "family": "CRV",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "BAL": {
+    "family": "BAL",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "SNX": {
+    "family": "SNX",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "LDO": {
+    "family": "LDO",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "RPL": {
+    "family": "RPL",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "KNC": {
+    "family": "KNC",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "STG": {
+    "family": "STG",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "FXS": {
+    "family": "FXS",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token",
+    "mechanism_source": "https://docs.frax.finance/fxs-and-vefxs/seigniorage"
+  },
+  "ENS": {
+    "family": "ENS",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "1INCH": {
+    "family": "1INCH",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "PENDLE": {
+    "family": "PENDLE",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "PEPE": {
+    "family": "PEPE",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "ENA": {
+    "family": "ENA",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "ONDO": {
+    "family": "ONDO",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "MOG": {
+    "family": "MOG",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "RNDR": {
+    "family": "RNDR",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "SPX": {
+    "family": "SPX",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "XEN": {
+    "family": "XEN",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "CVX": {
+    "family": "CVX",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "RLB": {
+    "family": "RLB",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "DBR": {
+    "family": "DBR",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "HEX": {
+    "family": "HEX",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "EIGEN": {
+    "family": "EIGEN",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "APU": {
+    "family": "APU",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "ETHFI": {
+    "family": "ETHFI",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "FLUID": {
+    "family": "FLUID",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "COW": {
+    "family": "COW",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "MATIC": {
+    "family": "MATIC",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "POL": {
+    "family": "POL",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "VIRTUAL": {
+    "family": "VIRTUAL",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "FET": {
+    "family": "FET",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "NOVA": {
+    "family": "NOVA",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "BEAM": {
+    "family": "BEAM",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "MORPHO": {
+    "family": "MORPHO",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "AURA": {
+    "family": "AURA",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "PRIME": {
+    "family": "PRIME",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "RSR": {
+    "family": "RSR",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "TRUMP": {
+    "family": "TRUMP",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "COMP": {
+    "family": "COMP",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "ARB": {
+    "family": "ARB",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "USUAL": {
+    "family": "USUAL",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "OHM": {
+    "family": "OHM",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "LQTY": {
+    "family": "LQTY",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "SPELL": {
+    "family": "SPELL",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "FLX": {
+    "family": "FLX",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "BAT": {
+    "family": "BAT",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "ENJ": {
+    "family": "ENJ",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "MANA": {
+    "family": "MANA",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "REN": {
+    "family": "REN",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "YFI": {
+    "family": "YFI",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "ZRX": {
+    "family": "ZRX",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "SUSHI": {
+    "family": "SUSHI",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "TAO": {
+    "family": "TAO",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "SOL": {
+    "family": "SOL",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "BNB": {
+    "family": "BNB",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "AVAX": {
+    "family": "AVAX",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "DOGE": {
+    "family": "DOGE",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "SHIB": {
+    "family": "SHIB",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "WOO": {
+    "family": "WOO",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "GRT": {
+    "family": "GRT",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "DYDX": {
+    "family": "DYDX",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "SAND": {
+    "family": "SAND",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "APE": {
+    "family": "APE",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "CHZ": {
+    "family": "CHZ",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "IMX": {
+    "family": "IMX",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "OP": {
+    "family": "OP",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "FTM": {
+    "family": "FTM",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "INJ": {
+    "family": "INJ",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "LPT": {
+    "family": "LPT",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "OCEAN": {
+    "family": "OCEAN",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "AGIX": {
+    "family": "AGIX",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "TRAC": {
+    "family": "TRAC",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "QNT": {
+    "family": "QNT",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "AXL": {
+    "family": "AXL",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "BLUR": {
+    "family": "BLUR",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "WLD": {
+    "family": "WLD",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "GNO": {
+    "family": "GNO",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "DEXE": {
+    "family": "DEXE",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "LRC": {
+    "family": "LRC",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "ILV": {
+    "family": "ILV",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "GALA": {
+    "family": "GALA",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "HFT": {
+    "family": "HFT",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "ALCX": {
+    "family": "ALCX",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "PERP": {
+    "family": "PERP",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "PHA": {
+    "family": "PHA",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "UMA": {
+    "family": "UMA",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "SSV": {
+    "family": "SSV",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "SAFE": {
+    "family": "SAFE",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "SWISE": {
+    "family": "SWISE",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "LIT": {
+    "family": "LIT",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "ZRO": {
+    "family": "ZRO",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "ETHIX": {
+    "family": "ETHIX",
+    "note": "Token autonome : ne pas le fusionner avec la monnaie du protocole ou du réseau.",
+    "token_kind": "independent_token"
+  },
+  "WTAO": {
+    "family": "TAO",
+    "note": "Représentation de cet actif ; identité et mécanisme du pont à vérifier.",
+    "token_kind": "wrapped_asset"
+  },
+  "WSOL": {
+    "family": "SOL",
+    "note": "Représentation de cet actif ; identité et mécanisme du pont à vérifier.",
+    "token_kind": "wrapped_asset"
+  },
+  "WBNB": {
+    "family": "BNB",
+    "note": "Représentation de cet actif ; identité et mécanisme du pont à vérifier.",
+    "token_kind": "wrapped_asset"
+  },
+  "WAVAX": {
+    "family": "AVAX",
+    "note": "Représentation de cet actif ; identité et mécanisme du pont à vérifier.",
+    "token_kind": "wrapped_asset"
+  },
+  "WMATIC": {
+    "family": "MATIC",
+    "note": "Représentation de cet actif ; identité et mécanisme du pont à vérifier.",
+    "token_kind": "wrapped_asset"
+  },
+  "RENFIL": {
+    "family": "FIL",
+    "note": "Représentation de cet actif ; identité et mécanisme du pont à vérifier.",
+    "token_kind": "wrapped_asset"
+  },
+  "XSUSHI": {
+    "family": "SUSHI",
+    "note": "Reçu lié à SUSHI, sans parité unitaire garantie.",
+    "token_kind": "staking_receipt"
+  },
+  "SENA": {
+    "family": "ENA",
+    "note": "Reçu du staking de ENA chez Ethena ; à distinguer de sUSDe, classé en USD.",
+    "token_kind": "staking_receipt",
+    "mechanism_source": "https://docs.ethena.fi/video-guides/how-to-stake-ena",
+    "reviewed_on": "2026-11-23"
+  },
+  "STONE": {
+    "family": "ETH",
+    "note": "Reçu StakeStone lié à ETH staké ; le taux de conversion en ETH varie.",
+    "token_kind": "staking_receipt",
+    "mechanism_source": "https://docs.stakestone.io/stakestone/stone-eth/how-it-works",
+    "reviewed_on": "2026-11-23"
+  },
+  "PZETH": {
+    "family": "ETH",
+    "note": "Reçu Renzo dont le collatéral restaké est retirable en wstETH.",
+    "token_kind": "restaking_receipt",
+    "mechanism_source": "https://docs.renzoprotocol.com/docs/products/staking-suite/pzeth",
+    "reviewed_on": "2026-11-23"
+  },
+  "STLINK": {
+    "family": "LINK",
+    "note": "Reçu du staking de LINK chez stake.link.",
+    "token_kind": "staking_receipt",
+    "mechanism_source": "https://docs.stake.link/guides/how-to-stake-link/",
+    "reviewed_on": "2026-11-23"
+  },
+  "WSTLINK": {
+    "family": "LINK",
+    "note": "Version enveloppée de stLINK ; conserver son taux de conversion.",
+    "token_kind": "staking_receipt",
+    "mechanism_source": "https://docs.stake.link/guides/stlink-vs-wstlink/",
+    "reviewed_on": "2026-11-23"
+  },
+  "SPENDLE": {
+    "family": "PENDLE",
+    "note": "Reçu du staking de PENDLE ; les conditions de sortie restent distinctes.",
+    "token_kind": "staking_receipt",
+    "mechanism_source": "https://docs.pendle.finance/pendle-v2-dev/Contracts/sPENDLE",
+    "reviewed_on": "2026-11-23"
+  },
+  "CVXCRV": {
+    "family": "CRV",
+    "note": "Représentation de CRV verrouillés chez Convex ; le prix de marché peut diverger de CRV.",
+    "token_kind": "locked_receipt",
+    "mechanism_source": "https://docs.convexfinance.com/convexfinance/general-information/tokenomics",
+    "reviewed_on": "2026-11-23"
+  },
+  "CVXFXS": {
+    "family": "FXS",
+    "note": "Représentation de FXS verrouillés chez Convex ; ne pas confondre avec le token CVX.",
+    "token_kind": "locked_receipt",
+    "mechanism_source": "https://docs.convexfinance.com/convexfinance/general-information/tokenomics",
+    "reviewed_on": "2026-11-23"
+  },
+  "SDCRV": {
+    "family": "CRV",
+    "note": "Reçu de CRV verrouillés chez Stake DAO ; pas une garantie de parité de prix.",
+    "token_kind": "locked_receipt",
+    "mechanism_source": "https://docs.stakedao.org/liquidlockers",
+    "reviewed_on": "2026-11-23"
+  },
+  "STUSDS": {
+    "family": "USD",
+    "note": "Capital à risque déposé en USDS finançant des emprunts garantis par SKY. Famille de référence USD, pas un simple stablecoin ni une valeur garantie.",
+    "token_kind": "structured_credit",
+    "mechanism_source": "https://developers.skyeco.com/protocol/tokens/stusds/",
+    "reviewed_on": "2026-11-23"
+  },
+  "STKGHO": {
+    "family": "USD",
+    "note": "Staking de sécurité Aave ; famille du sous-jacent, avec risque de perte propre au mécanisme. Alias ajouté à partir de la référence par adresse existante.",
+    "token_kind": "safety_stake",
+    "mechanism_source": "https://aave-dao.github.io/aave-address-book/api/v1/modules/AaveSafetyModule.json",
+    "reviewed_on": "2026-11-23"
+  },
+  "STKAAVE": {
+    "family": "AAVE",
+    "note": "Staking de sécurité Aave ; famille du sous-jacent, avec risque de perte propre au mécanisme. Alias ajouté à partir de la référence par adresse existante.",
+    "token_kind": "safety_stake",
+    "mechanism_source": "https://aave-dao.github.io/aave-address-book/api/v1/modules/AaveSafetyModule.json",
+    "reviewed_on": "2026-11-23"
+  },
+  "STKGHO.V1": {
+    "family": "USD",
+    "note": "Staking de sécurité Aave ; famille du sous-jacent, avec risque de perte propre au mécanisme. Alias ajouté à partir de la référence par adresse existante.",
+    "token_kind": "safety_stake",
+    "mechanism_source": "https://aave-dao.github.io/aave-address-book/api/v1/modules/UmbrellaEthereum.json",
+    "reviewed_on": "2026-11-23"
+  },
+  "STKWAETHUSDC.V1": {
+    "family": "USD",
+    "note": "Staking de sécurité Aave ; famille du sous-jacent, avec risque de perte propre au mécanisme. Alias ajouté à partir de la référence par adresse existante.",
+    "token_kind": "safety_stake",
+    "mechanism_source": "https://aave-dao.github.io/aave-address-book/api/v1/modules/UmbrellaEthereum.json",
+    "reviewed_on": "2026-11-23"
+  },
+  "STKWAETHUSDT.V1": {
+    "family": "USD",
+    "note": "Staking de sécurité Aave ; famille du sous-jacent, avec risque de perte propre au mécanisme. Alias ajouté à partir de la référence par adresse existante.",
+    "token_kind": "safety_stake",
+    "mechanism_source": "https://aave-dao.github.io/aave-address-book/api/v1/modules/UmbrellaEthereum.json",
+    "reviewed_on": "2026-11-23"
+  },
+  "STKWAETHWETH.V1": {
+    "family": "ETH",
+    "note": "Staking de sécurité Aave ; famille du sous-jacent, avec risque de perte propre au mécanisme. Alias ajouté à partir de la référence par adresse existante.",
+    "token_kind": "safety_stake",
+    "mechanism_source": "https://aave-dao.github.io/aave-address-book/api/v1/modules/UmbrellaEthereum.json",
+    "reviewed_on": "2026-11-23"
+  }
+}
