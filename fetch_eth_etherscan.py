@@ -1,20 +1,3 @@
-"""
-Fetch the native ETH flows of every wallet with the Etherscan V2 API and save
-them to Parquet on the Onyxia S3 (MinIO) storage.
-
-tokentx (fetch_transfers_etherscan.py) only returns ERC-20 transfers. Native
-ETH moves in two ways, one Etherscan action each (the "kind" column):
-  - "normal"   (action=txlist): transactions sent or received by the address.
-    value is the ETH sent by "from" to "to" (0 for most contract calls).
-  - "internal" (action=txlistinternal): ETH sent by a contract during a
-    transaction (e.g. the Aave WrappedTokenGateway paying out a borrow in ETH).
-A failed transaction or call moves no ETH: is_error = 1.
-
-Users are the wallets of WALLETS_EVENTS_FILE, and the block range ends at the
-last block of TRANSFERS_FILE, so that ETH and ERC-20 flows cover the same period.
-As in fetch_transfers_etherscan.py, a user is either complete or absent, never
-partial: users with too many rows are listed in SKIPPED_FILE instead.
-"""
 import os
 import random
 import re
@@ -47,14 +30,13 @@ MAX_CALLS_PER_USER = 20 # per (user, kind): an address still truncated after 20 
 
 ACTIONS = {"normal": "txlist", "internal": "txlistinternal"}
 
-# Etherscan field -> column name. value is in wei, kept exact as a string.
 FIELDS = {
     "blockNumber":     "block_number",
     "timeStamp":       "timestamp",
     "hash":            "tx_hash",
     "from":            "from",
     "to":              "to",
-    "value":           "value",
+    "value":           "value",             # in wei, kept as a string
     "isError":         "is_error",
     "methodId":        "method_id",         # normal only
     "gasUsed":         "gas_used",
@@ -161,7 +143,7 @@ def fetch_kind(session, limiter, api_key, kind, user, end_block):
         # Truncated: keep the complete blocks, start again from the last one
         last = int(result[-1]["blockNumber"])
         complete = [t for t in result if int(t["blockNumber"]) < last]
-        if not complete:  # MAX_ROWS+ rows in a single block: a contract, not a wallet
+        if not complete:  # MAX_ROWS+ rows in a single block
             return [], {"user": user, "kind": kind, "reason": "big_block",
                         "rows_seen": len(rows), "block_reached": last}
         rows += complete
