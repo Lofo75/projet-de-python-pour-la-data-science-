@@ -16,7 +16,7 @@ ETHERSCAN_BASE_URL = "https://api.etherscan.io/v2/api"
 ETH_CHAIN_ID = 1
 START_BLOCK  = 16_496_817  # first Aave V3 Pool event
 
-EVENTS_FILE = "s3://bastienlevyguinot/aave_v3/aave_v3_events.parquet"
+EVENTS_FILE = "s3://bastienlevyguinot/diffusion/aave_v3_events.parquet"
 OUT_DIR     = "s3://bastienlevyguinot/aave_v3/transfers_parts"
 OUT_FILE    = "s3://bastienlevyguinot/diffusion/transfers.parquet"
 SKIPPED_FILE = "s3://bastienlevyguinot/diffusion/skipped_users_during_transfers_fetching.parquet"
