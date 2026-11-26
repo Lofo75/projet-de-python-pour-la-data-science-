@@ -199,3 +199,106 @@ plt.savefig("exposition_agregee.png", dpi=150, bbox_inches="tight")
 plt.close()
 
 
+
+
+
+#maintenant on va faire d'autres statistiques descriptives en utilisant la classification 
+# ÉTAPE 6 : exposition par famille (USD, ETH, BTC)
+
+import json
+import sys
+from pathlib import Path
+
+import s3fs
+
+# dossier racine du dépôt (là où se trouvent scripts/ et data/reference/)
+RACINE = Path.cwd() if (Path.cwd() / "scripts").exists() else Path.cwd().parent
+sys.path.insert(0, str(RACINE / "scripts"))
+from token_families import classify_tokens, token_inventory
+
+# les deux tables de correspondance du groupe
+aliases = json.loads((RACINE / "data/reference/symbol_aliases.json").read_text())
+reference = pd.DataFrame(json.loads((RACINE / "data/reference/token_reference.json").read_text()))
+
+# une ligne par token, avec sa famille (on lit le fichier des flux directement sur S3)
+fs = s3fs.S3FileSystem()
+with fs.open(FICHIER_FLUX) as f:
+    familles_tokens = classify_tokens(token_inventory(f), reference, aliases)
+familles = familles_tokens.set_index("token_address")["family"]   # adresse -> famille
+
+def famille_principale(f):
+    # on garde les trois grandes familles, le reste est regroupé dans "Autre"
+    return f if f in ("USD", "ETH", "BTC") else "Autre"
+
+print(familles.map(famille_principale).value_counts())
+
+
+# fonction pour dessiner un tableau croisé sous forme de carte de chaleur
+def carte_chaleur(tableau, titre, xlabel, ylabel, fichier):
+    pct = 100 * tableau.div(tableau.sum(axis=1), axis=0)     # % de chaque ligne
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    image = ax.imshow(pct, cmap="Blues", vmin=0, vmax=100)  # couleur = % de la ligne
+
+    # noms des familles sur les axes
+    ax.set_xticks(range(len(tableau.columns)), tableau.columns)
+    ax.set_yticks(range(len(tableau.index)), tableau.index)
+
+    # dans chaque case : le % et, en dessous, le nombre
+    for i in range(len(tableau.index)):
+        for j in range(len(tableau.columns)):
+            couleur = "white" if pct.iloc[i, j] > 60 else "black"
+            ax.text(j, i, f"{pct.iloc[i, j]:.0f} %\n({tableau.iloc[i, j]:,})",
+                    ha="center", va="center", color=couleur, fontsize=9)
+
+    ax.set_title(titre)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    fig.colorbar(image, ax=ax, label="% de la ligne")
+    plt.savefig(fichier, dpi=150, bbox_inches="tight")
+    plt.close()
+
+
+# 6.1 : ce que les utilisateurs déposent et ce qu'ils empruntent
+
+ev = evenements[evenements["event_name"].isin(["Supply", "Borrow"])].copy()
+ev["user"] = ev["user"].str.lower()
+ev["famille"] = ev["reserve"].map(familles).map(famille_principale)   # reserve est déjà en minuscules
+
+# une ligne par utilisateur et par famille déposée / empruntée
+depots = ev[ev["event_name"] == "Supply"][["user", "famille"]].drop_duplicates()
+emprunts = ev[ev["event_name"] == "Borrow"][["user", "famille"]].drop_duplicates()
+
+# pour chaque utilisateur, chaque famille déposée avec chaque famille empruntée
+croisement = depots.merge(emprunts, on="user", suffixes=("_deposee", "_empruntee"))
+
+print("utilisateurs qui déposent :", depots["user"].nunique())
+print("utilisateurs qui empruntent :", emprunts["user"].nunique())
+
+tableau_61 = pd.crosstab(croisement["famille_deposee"], croisement["famille_empruntee"])
+carte_chaleur(tableau_61,
+              "Ce que les utilisateurs empruntent, selon ce qu'ils déposent",
+              "Famille empruntée", "Famille déposée",
+              "depot_emprunt_familles.png")
+
+
+# 6.2 : ce que devient l'argent sorti d'Aave
+
+aval = flux.loc[~flux["tracked"], ["user", "tx_hash", "from", "to", "token_address"]].copy()   # hors transactions Aave
+aval["famille"] = aval["token_address"].str.lower().map(familles).map(famille_principale)
+user = aval["user"].str.lower()
+
+# ce que l'utilisateur envoie et ce qu'il reçoit, une ligne par transaction et par famille
+envoye = aval[aval["from"].str.lower() == user][["user", "tx_hash", "famille"]].drop_duplicates()
+recu = aval[aval["to"].str.lower() == user][["user", "tx_hash", "famille"]].drop_duplicates()
+
+# transactions où l'utilisateur envoie ET reçoit : ce sont des échanges
+echanges = envoye.merge(recu, on=["user", "tx_hash"], suffixes=("_envoyee", "_recue"))
+
+print("nombre d'échanges :", len(echanges[["user", "tx_hash"]].drop_duplicates()))
+
+tableau_62 = pd.crosstab(echanges["famille_envoyee"], echanges["famille_recue"])
+carte_chaleur(tableau_62,
+              "Échanges après une sortie d'Aave : ce qu'on reçoit selon ce qu'on envoie",
+              "Famille reçue", "Famille envoyée",
+              "echanges_familles.png")
