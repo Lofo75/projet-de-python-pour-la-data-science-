@@ -198,3 +198,4 @@ axes[0].set_title("Quantité totale détenue grâce à Aave, tous users confondu
 plt.savefig("exposition_agregee.png", dpi=150, bbox_inches="tight")
 plt.close()
 
+

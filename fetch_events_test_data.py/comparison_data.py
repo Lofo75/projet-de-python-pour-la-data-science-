@@ -1,4 +1,5 @@
 
+import os
 import glob
 import pandas as pd
 import s3fs
@@ -94,3 +95,20 @@ print(
         KEY + ["user_ref", "user_alc"]
     ].head(20).to_string(index=False)
 )
+
+# Vérification des sources: est ce que mon "user" correspond au "caller" de web3
+verif = ref[KEY + ["event", "user"]].merge(alc[KEY + ["user", "caller"]], on=KEY,
+                                           suffixes=("_ref", "_alc"))
+verif["caller"] = verif["caller"].str.lower()
+
+# les différences sur user interviennent sut quelles évènements 
+ecart_user = verif["user_ref"] != verif["user_alc"]
+print("Différences sur user, par type d'événement :")
+print(verif.loc[ecart_user, "event"].value_counts(), "\n")
+
+# au vu du résultat précédent on regarde si sur ces évènements là on a bien les mêmes users 
+sb = verif[verif["event"].isin(["supply", "borrow"])]
+ecart_caller = sb["user_ref"] != sb["caller"]
+print(f"supply et borrow : {ecart_caller.sum()} différence(s) entre mon user et son caller, sur {len(sb):,} événements")
+print(f"Part des dépôts et emprunts faits pour le compte d'un autre : "
+      f"{100 * (sb['user_alc'] != sb['caller']).mean():.1f} %")
