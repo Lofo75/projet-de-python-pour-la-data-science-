@@ -110,5 +110,3 @@ print(verif.loc[ecart_user, "event"].value_counts(), "\n")
 sb = verif[verif["event"].isin(["supply", "borrow"])]
 ecart_caller = sb["user_ref"] != sb["caller"]
 print(f"supply et borrow : {ecart_caller.sum()} différence(s) entre mon user et son caller, sur {len(sb):,} événements")
-print(f"Part des dépôts et emprunts faits pour le compte d'un autre : "
-      f"{100 * (sb['user_alc'] != sb['caller']).mean():.1f} %")
