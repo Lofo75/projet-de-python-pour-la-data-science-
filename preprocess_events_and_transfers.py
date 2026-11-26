@@ -1,55 +1,5 @@
-"""
-Keep the Aave V3 events and the ERC-20 transfers of wallets only.
-
-Run after fetch_transfers_etherscan.py and before match_events_transfers.py.
-Replaces drop_non_wallets.py, transfers_drop_contracts.py, preprocess_events.py,
-drop_truncated.py and transfers_drop_incomplete.py.
-
-Every user of EVENTS_FILE is checked (addresses are compared in lowercase).
-A user is dropped, with all its events and transfers, if it is:
-  1. Identity (free, on every user):
-     - skipped_fetch: skipped by fetch_transfers_etherscan.py (too many
-                      transfers, or 1,000+ transfers in a single block)
-     - burn:          in BURN_ADDRESSES (null address, dead addresses, precompiles)
-     - reserve:       an Aave V3 reserve (reserve or collateral_asset of an event)
-     - token:         an ERC-20 contract (token_address of any transfer: aTokens,
-                      debt tokens and every other token that moved)
-  2. Consistency (free, on the users left after 1):
-     - no_transfers:              no transfer fetched at all
-     - event_after_last_transfer: an event in a later block than its last transfer
-     Every Aave event moves an aToken or a debt token of its user, so these
-     histories do not match the events (e.g. events fetched up to a later block
-     than the transfers).
-  3. Code (eth_getCode at the latest block, on the users left after 2):
-     - contract: any code except
-         eoa:      no code, a wallet controlled by a private key
-         eoa_7702: 0xef0100 + address, an EOA delegating to code (EIP-7702)
-         safe:     a Safe (Gnosis Safe) proxy, a multisig wallet: small code
-                   containing the masterCopy() selector a619486e
-       Other smart-contract wallets (Argent, ERC-4337 accounts...) are not told
-       apart and are dropped as contracts.
-Several reasons of group 1 are joined with "+" (e.g. "reserve+token").
-
-Outputs, rebuilt from the raw inputs at every run (a second run gives the same
-result; only the eth_getCode cache in CODE_DIR is reused):
-  - OUT_DIR/batch_*.parquet: the batches of IN_DIR without the dropped users
-  - TRANSFERS_OUT:           those batches merged
-  - EVENTS_OUT:              the events of the users kept
-  - SKIPPED_OUT:             one row per dropped user: address, reason,
-                             n_transfers (in IN_DIR, 0 for skipped_fetch), n_events
-Address columns are lowercased in every output.
-
-eth_getCode calls go to RPC_URL, a free public node that needs no key, as
-JSON-RPC batches of RPC_BATCH addresses. The code types are cached in CODE_DIR
-as Parquet parts of up to PART_SIZE addresses, so an interrupted run resumes
-without calling again for the addresses already read. S3 credentials and
-endpoint are read from the AWS_* environment variables that Onyxia injects into
-the service. Usage:
-    python3 preprocess_events_and_transfers.py
-"""
 import re
 import time
-
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
