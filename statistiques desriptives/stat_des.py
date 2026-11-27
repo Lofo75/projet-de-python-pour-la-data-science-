@@ -33,18 +33,18 @@ DOSSIER_FIGURES.mkdir(exist_ok=True)
 
 def charger_donnees():
     dossier = f"s3://{os.environ['VAULT_TOP_DIR']}/diffusion"
-    fichier_flux = f"{dossier}/transfers_wallets_traced.parquet"
-    flux = pd.read_parquet(fichier_flux, columns=[
-        "user", "tx_hash", "block_number", "timestamp", "from", "to",
+    fichier_flux = f"{dossier}/transfers_wallets_traced.parquet"            #on récupère les transferts
+    flux = pd.read_parquet(fichier_flux, columns=[                          #on ne prend pas toutes les colonnes 
+        "user", "tx_hash", "block_number", "timestamp", "from", "to",           
         "token_address", "token_decimal", "value", "traced_fraction"])
-    evenements = pd.read_parquet(f"{dossier}/aave_v3_events_wallets.parquet",
+    evenements = pd.read_parquet(f"{dossier}/aave_v3_events_wallets.parquet",       #les différents évènements 
                                  columns=["block_number", "event_name"])
     return flux, evenements, fichier_flux
 
-
+#on convertit les données pour les exploiter
 def preparer_flux(flux):
     # 10.0 (float) et pas 10 : certains tokens ont 27 décimales, un entier déborderait
-    flux["montant"] = flux["value"].astype(float) / (10.0 ** flux["token_decimal"])
+    flux["montant"] = flux["value"].astype(float) / (10.0 ** flux["token_decimal"])     #dans le DataFrame 1,5 USDC est stocké comme 1 500 000
     flux["mois"] = pd.to_datetime(flux["timestamp"], unit="s").dt.to_period("M")
     flux["user_l"] = flux["user"].str.lower()
     flux["token"] = flux["token_address"].str.lower()   # ETH et WETH ont la même adresse : un seul solde
@@ -52,7 +52,7 @@ def preparer_flux(flux):
     flux["to"] = flux["to"].str.lower()
     return flux
 
-
+#on va utiliser le fichier de famille de ruben qui associe les transferts à des familles 
 def charger_familles(fichier_flux):
     """Table token -> (family, poste), limitée aux familles USD, ETH, BTC."""
     racine = Path.cwd() if (Path.cwd() / "scripts").exists() else Path.cwd().parent
@@ -74,42 +74,45 @@ def charger_familles(fichier_flux):
         familles.to_parquet(fichier, index=False)
 
     fam = familles[["token_address", "family", "token_kind"]].copy()
-    fam["token_address"] = fam["token_address"].str.lower()
-    fam = fam[fam["family"].isin(FAMILLES) & fam["token_kind"].isin(TYPES_1POUR1)]
-    fam["poste"] = np.where(fam["token_kind"] == "debt", "dette", "avoir")
+    fam["token_address"] = fam["token_address"].str.lower()             #on remet en minuscule pour que toutes les sources de données soient de même format
+    fam = fam[fam["family"].isin(FAMILLES) & fam["token_kind"].isin(TYPES_1POUR1)]  #on élimine tous les tokens qui ne sont pas 1pour1 (AAVE, sDai...)
+    fam["poste"] = np.where(fam["token_kind"] == "debt", "dette", "avoir")          #on définit dette et avoir, si ce n'est pas une dette c'est un avoir 
     return fam.drop_duplicates("token_address").set_index("token_address")[["family", "poste"]]
 
+
+#on créé un tableau qui montre ce que chaque user possède et doit (uniquement dans les monnaies considérées)par mois
+
 def soldes_mensuels(flux, fam):
-    f = flux[flux["token"].isin(fam.index)].copy()
-    f["ordre_tx"] = f.groupby(["user_l", "tx_hash"], sort=False).ngroup()
+    f = flux[flux["token"].isin(fam.index)].copy()              #on garde que les tokens qui nous intéressent 
+    f["ordre_tx"] = f.groupby(["user_l", "tx_hash"], sort=False).ngroup()       #des transactions peuvent avoir lieu dans le même bloc donc on numérote par ordre
 
     # chaque transfert devient un mouvement : - montant entier si envoyé, + part tracée si reçu
     sorties = f[f["from"] == f["user_l"]].assign(mouvement=-f["montant"], sens=0)
     entrees = f[f["to"] == f["user_l"]].assign(mouvement=f["traced_fraction"] * f["montant"], sens=1)
-    m = (pd.concat([sorties, entrees])
+    m = (pd.concat([sorties, entrees])                                                  #on empile les deux tableaux 
            .sort_values(["user_l", "token", "block_number", "ordre_tx", "sens"])
            .reset_index(drop=True))
-    del f, sorties, entrees
+    del f, sorties, entrees     #sert à libérer de la mémoire
 
     # solde par (user, token) qui ne descend jamais sous 0 :
     # on retire au cumul le point le plus bas déjà atteint (s'il est négatif)
-    cle = [m["user_l"], m["token"]]
-    cumul = m.groupby(cle)["mouvement"].cumsum()
-    m["solde"] = cumul - cumul.groupby(cle).cummin().clip(upper=0)
+    cle = [m["user_l"], m["token"]]             #on définit un compte 
+    cumul = m.groupby(cle)["mouvement"].cumsum()                #on fait la somme cumulé par token
+    m["solde"] = cumul - cumul.groupby(cle).cummin().clip(upper=0)      
 
     # variation du solde à chaque mouvement, puis somme par (user, mois, famille, poste)
-    m["variation"] = m.groupby(cle)["solde"].diff().fillna(m["solde"])
-    m = m.join(fam, on="token")
+    m["variation"] = m.groupby(cle)["solde"].diff().fillna(m["solde"])          #on calcule les variations [kème valeur]-[k-1ème valeur]
+    m = m.join(fam, on="token")                                         #on ajoute famille et poste 
     v = (m.groupby(["user_l", "mois", "family", "poste"])["variation"].sum()
           .unstack(["family", "poste"], fill_value=0))
     colonnes = pd.MultiIndex.from_product([FAMILLES, POSTES], names=["family", "poste"])
     v = v.reindex(columns=colonnes, fill_value=0)
 
     # on complète les mois sans mouvement, puis on cumule : solde de fin de mois
-    tous_les_mois = pd.period_range(m["mois"].min(), DERNIER_MOIS, freq="M")
-    grille = pd.MultiIndex.from_product([v.index.get_level_values("user_l").unique(), tous_les_mois],
+    tous_les_mois = pd.period_range(m["mois"].min(), DERNIER_MOIS, freq="M")            #liste de tous les mois
+    grille = pd.MultiIndex.from_product([v.index.get_level_values("user_l").unique(), tous_les_mois],           #Il range le résultat dans un MultiIndex, c'est-à-dire une liste d'étiquettes à deux parties, utilisable comme étiquettes de lignes d'un tableau.
                                         names=["user_l", "mois"])
-    return v.reindex(grille, fill_value=0).groupby(level="user_l").cumsum()
+    return v.reindex(grille, fill_value=0).groupby(level="user_l").cumsum()     #on ajoute les lignes manquantes 
 
 
 #on va classer les profils pour faire des statistiques descriptives en créant des catégories correspondants à des comportements
@@ -131,36 +134,36 @@ def classer(soldes):
     une_dette = doit["USD"] | doit["ETH"] | doit["BTC"]
     un_avoir = detient["USD"] | detient["ETH"] | detient["BTC"]
     conditions = [
-        ~(un_avoir | une_dette),
-        ~une_dette,
-        detient["ETH"] & doit["USD"],
-        detient["BTC"] & doit["USD"],
-        doit["ETH"] & detient["USD"],
-        (detient["ETH"] & doit["ETH"]) | (detient["USD"] & doit["USD"]) | (detient["BTC"] & doit["BTC"]),
+        ~(un_avoir | une_dette),                # 1 aucune position (le ~ prend le contraire de l'un ou l'autre )
+        ~une_dette,                             # 2 épargnant
+        detient["ETH"] & doit["USD"],           # 3 long ETH
+        detient["BTC"] & doit["USD"],           # 4 long BTC
+        doit["ETH"] & detient["USD"],           # 5 court ETH
+        (detient["ETH"] & doit["ETH"]) | (detient["USD"] & doit["USD"]) | (detient["BTC"] & doit["BTC"]),   # 6 looping
     ]
     return pd.Series(np.select(conditions, PROFILS, default="autre emprunteur"), index=soldes.index)
 
 
-# ---------------------------------------------------------------------------
-# Les statistiques
-# ---------------------------------------------------------------------------
+
+#on trace maintenant les statistiques qui nous intéressent 
+
 
 def stat_evenements_par_mois(evenements, flux):
-    # les événements n'ont pas de date : on l'interpole à partir des blocs des transferts
+    # les événements en eux mêmes n'ont pas de date : on l'interpole à partir des blocs des transferts
     ref = flux[["block_number", "timestamp"]].drop_duplicates("block_number").sort_values("block_number")
     ts = np.interp(evenements["block_number"], ref["block_number"], ref["timestamp"])
     mois = pd.to_datetime(ts, unit="s").to_period("M")
 
-    par_mois = evenements.groupby([mois, evenements["event_name"]]).size().unstack(fill_value=0)
+    par_mois = evenements.groupby([mois, evenements["event_name"]]).size().unstack(fill_value=0)        #groupby sur deux critères : le mois (calculé juste au-dessus) et le type d'événement
     print("\nÉvénements par mois (12 derniers) :\n", par_mois.tail(12))
 
     par_mois.index = par_mois.index.to_timestamp()
-    ax = par_mois.plot(figsize=(12, 5))
+    ax = par_mois.plot(figsize=(12, 5))                 # figsize = (largeur, hauteur) en pouces
     ax.set_title("Événements Aave V3 par mois")
     ax.set_xlabel("Mois")
     ax.set_ylabel("Nombre d'événements")
     ax.grid(alpha=0.3)
-    plt.savefig(DOSSIER_FIGURES / "0_evenements_par_mois.png", dpi=150, bbox_inches="tight")
+    plt.savefig(DOSSIER_FIGURES / "0_evenements_par_mois.png", dpi=150, bbox_inches="tight")            #on enregistre en png 
     plt.close()
 
 
@@ -230,19 +233,13 @@ def stat2bis_profils_evolution(soldes):
 
 
 def stat4_variation_exposition(total):
-    """Variation en % de l'exposition nette d'un mois sur l'autre.
-
-    Exemple : 100 ETH au mois 0, 102 ETH au mois 1  ->  +2 %.
-    On divise par la valeur absolue du mois précédent, pour que le signe se lise
-    toujours pareil (+ = l'exposition augmente). Le % n'a pas de sens quand le mois
-    précédent est presque nul ou quand le net change de signe : ces mois sont retirés.
-    """
+    """Variation en % de l'exposition nette d'un mois sur l'autre. """
     net = pd.DataFrame({f: total[(f, "avoir")] - total[(f, "dette")] for f in FAMILLES})
-    precedent = net.shift(1)
-    variation = 100 * (net - precedent) / precedent.abs()
+    precedent = net.shift(1)                    #décales toutes les valeurs d'une ligne vers le bas 
+    variation = 100 * (net - precedent) / precedent.abs()       #calcul le pourcentage de variation 
 
-    base_trop_petite = precedent.abs() < 0.01 * net.abs().max()   # moins de 1 % du maximum
-    change_de_signe = np.sign(net) != np.sign(precedent)
+    base_trop_petite = precedent.abs() < 0.01 * net.abs().max()   # moins de 1 % du maximum, on compare chaque case au seuil de sa colonne
+    change_de_signe = np.sign(net) != np.sign(precedent)                
     variation = variation.mask(base_trop_petite | change_de_signe)
 
     print("\nSTAT 4 - variation mensuelle de l'exposition nette, en % (6 derniers mois) :\n",
@@ -252,7 +249,7 @@ def stat4_variation_exposition(total):
     fig, axes = plt.subplots(len(FAMILLES), 1, figsize=(11, 3 * len(FAMILLES)), sharex=True)
     for ax, famille in zip(axes, FAMILLES):
         valeurs = variation[famille]
-        couleurs = np.where(valeurs >= 0, "#2a9d8f", "#e76f51")
+        couleurs = np.where(valeurs.fillna(0) >= 0, "#2a9d8f", "#e76f51")
         ax.bar(dates, valeurs.fillna(0), width=20, color=couleurs)
         ax.axhline(0, color="grey", linewidth=0.8)
         ax.set_title(f"Famille {famille}")
@@ -264,10 +261,6 @@ def stat4_variation_exposition(total):
     plt.close()
     return variation
 
-
-# ---------------------------------------------------------------------------
-# Lancement
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     flux, evenements, fichier_flux = charger_donnees()
