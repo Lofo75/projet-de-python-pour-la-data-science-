@@ -1,38 +1,4 @@
-"""
-Match the Aave V3 events of wallets to their ERC-20 transfers.
-
-A transfer is "tracked" when an event of the same user happened in the same
-transaction (same tx_hash and user). The transfers of WALLETS_DIR are written
-to OUT_FILE with a boolean "tracked" column.
-
-Each event is also checked against the transfers it must emit, seen from the
-user's transfers (Z = null address, U = reserve, A = its aToken, D = its
-variable debt token, u = user):
-  Supply           s_mint        A: Z -> u
-                   s_underlying  U: caller -> A, value = amount      (if caller = u)
-  Withdraw         w_burn        A: u -> Z (or Z -> u when the interest
-                                 accrued exceeds the amount withdrawn)
-                   w_underlying  U: A -> recipient, value = amount   (if recipient = u)
-  Borrow           b_mint        D: Z -> u                            (variable rate only)
-                   b_underlying  U: A or Z (GHO) -> caller, value = amount (if caller = u)
-  Repay            r_burn        D: u -> Z (or Z -> u)
-                   r_underlying  U: repayer -> A, value = amount     (if repayer = u, not useATokens)
-                   r_atoken      A: u -> Z (or Z -> u)              (if useATokens)
-  LiquidationCall  l_debt_burn   D: u -> Z (or Z -> u)
-                   l_collateral  A of the collateral: u -> anyone (or Z -> u)
-A transfer can satisfy several events of the same transaction. An event is
-"complete" when every expected transfer is found. Events after the last
-transfer fetched for their user are flagged "after_last_transfer": those
-users' histories were cut by MAX_CALLS_PER_USER, so missing transfers there
-are expected. The checks are saved to CHECKS_FILE, one row per event.
-
-The aToken and debt token of each reserve are read from the Pool
-(getReserveData) on RPC_URL, a free public node. The batches are processed
-one at a time (a user is in a single batch). Usage:
-    python3 match_events_transfers.py
-"""
 import re
-
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -55,7 +21,7 @@ BATCH_RE = re.compile(r"batch_(\d+)\.parquet$")
 
 
 def reserve_tokens(reserves):
-    """Lowercased reserve -> (aToken, variable debt token), words 8 and 10 of getReserveData."""
+    """Lowercased reserve -> (aToken, variable debt token), words 8 and 10 of getReserveData"""
     payload = [{"jsonrpc": "2.0", "id": i, "method": "eth_call",
                 "params": [{"to": POOL_ADDRESS, "data": GET_RESERVE_DATA + r[2:].rjust(64, "0")}, "latest"]}
                for i, r in enumerate(reserves)]
