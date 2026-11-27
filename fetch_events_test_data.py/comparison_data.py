@@ -10,7 +10,11 @@ ALCHEMY_FILE = f"{VAULT}/diffusion/aave_v3_events.parquet"
 
 fs = s3fs.S3FileSystem()
 
-csv_files = glob.glob("*.csv")
+from pathlib import Path
+
+# dossier data/ du projet, quel que soit l'endroit d'où on lance le script
+DATA = Path(__file__).resolve().parent.parent / "data"
+csv_files = sorted(glob.glob(str(DATA / "aave_*.csv")))
 
 print(csv_files)
 print(len(csv_files), "fichiers CSV trouvés")

@@ -1,23 +1,25 @@
 # Etape 1 pour Louis
 # https://etherscan.io/api
 
-
+#Récupération des données et production des CSV 
 
 #je mets ici le lien pour la documentation de l'API : https://docs.etherscan.io/make-your-first-call
-import os
-import time 
+
+import os # pour lire les variables d'environnement (la clé d'API, le nom du bucket SSP Cloud)
+import time   # pour faire des pauses entre les appels à l'API (limite de 3 requêtes par seconde) 
+
 #l'objectif ici est de récupérer la clé API qui est sécurisée dans un dossier env 
 if "ETHERSCAN_API_KEY" not in globals():
     from dotenv import load_dotenv
     load_dotenv()
     ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY")
 
-assert ETHERSCAN_API_KEY not in (None, "your-actual-etherscan-api-key"), "Set your Etherscan key (.env)"
+assert ETHERSCAN_API_KEY not in (None, "your-actual-etherscan-api-key"), "Set your Etherscan key (.env)" #on vérifie qu'on a bien la clé 
 print("Key loaded.")
 
 # on importe les bibliothèques utiles 
 
-import requests
+import requests          # pour envoyer les requêtes à l'API d'Etherscan et recevoir les réponses
 import pandas as pd
 from datetime import datetime, timezone
 
@@ -34,7 +36,7 @@ params = {
     "apikey": ETHERSCAN_API_KEY,
 }
 r = requests.get(ETHERSCAN_BASE_URL, params=params) #on envoie la requête
-etherscan_block = int(r.json()["result"], 16) #ici on traduit juste le résultat 
+etherscan_block = int(r.json()["result"], 16) #ici on traduit juste le résultat car il est en r.json
 print(r.json())
 print("Etherscan says latest block is:", etherscan_block)
 
@@ -42,10 +44,10 @@ print("Etherscan says latest block is:", etherscan_block)
 AAVE_V3_POOL = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
 BORROW_TOPIC0 = "0xb3d084820fb1a9decffb176436bd02558d15fac9b0ddfed8c465bc7359d7dce0" #clé de hashage de l'action 
 
-START_BLOCK = 16291127
-END_BLOCK = 25218797
+START_BLOCK = 16291127 #bloc du début de notre étude 
+END_BLOCK = 25218797    #bloc de fin 
 
-
+#Récupération des donées de Borrow dans un premier temps 
 
 params = {
     "chainid": ETH_CHAIN_ID,
@@ -97,137 +99,12 @@ EVENTS= {
     "liquidation": "0xe413a321e8681d831f4dbccbca790d2952b56f977908e45be37335533e005286"
 }
 
-def get_logs(topic0, start_block, end_block):
-    params = {
-        "chainid": ETH_CHAIN_ID,
-        "module": "logs",
-        "action": "getLogs",
-        "address": AAVE_V3_POOL,
-        "topic0": topic0,
-        "fromBlock": start_block,
-        "toBlock": end_block,
-        "apikey": ETHERSCAN_API_KEY,
-    }
-    r = requests.get(ETHERSCAN_BASE_URL, params=params)
-    result = r.json()["result"]
-    if not isinstance(result, list):      # en cas d'erreur, "result" est un texte
-        raise RuntimeError(f"Erreur Etherscan : {result}")
-    return result
-    
-
-def decode_log(event, log):
-    data = log["data"][2:]       # on enlève le "0x"
-    t = log["topics"]
-
-    # Champs communs à tous les événements
-    row = {
-        "event": event,
-        "block_number": decode(log["blockNumber"]),
-        "timestamp": decode(log["timeStamp"]),
-        "tx_hash": decode(log["transactionHash"]),
-        "log_index": decode(log["logIndex"]),
-    }
-
-    return row
-
-tables = {}
-for event, topic0 in EVENTS.items():
-    logs = get_logs(topic0, START_BLOCK, END_BLOCK)
-    print(f"{event}: {len(logs)} logs")
-    tables[event] = pd.DataFrame([decode_log(event, log) for log in logs])
-    time.sleep(0.4)     # le plan gratuit limite à 3 requêtes/seconde
-    print(tables)
-
-tables["borrow"]         # un tableau par événement
-
-
-
-#tentative de boucler pour segmenter les requêts sur getlog 100 000 par 100 000 
-"""
-START_BLOCK = 16291127
-END_BLOCK = 25218797
-
-end_block_cut = []
-
-for i in range(START_BLOCK, END_BLOCK, 100000):
-    end_block_cut.append(i + 99999)
-
-end_block_cut.append(START_BLOCK)
-end_block_cut.append(END_BLOCK)
-print(end_block_cut)
-print(len(end_block_cut))
-
-
-for i in range(len(end_block_cut) - 1):
-    START_BLOCK_modified = end_block_cut[i] + 1
-    END_BLOCK_modified = end_block_cut[i + 1]
-    EVENTS= {
-        "supply": "0x2b627736bca15cd5381dcf80b0bf11fd197d01a037c52b927a881a10fb73ba61",
-        "withdraw": "0x3115d1449a7b732c986cba18244e897a450f61e1bb8d589cd2e69e6c8924f9f7",
-        "borrow": "0xb3d084820fb1a9decffb176436bd02558d15fac9b0ddfed8c465bc7359d7dce0",
-        "repay": "0xa534c8dbe71f871f9f3530e97a74601fea17b426cae02e1c5aee42c96c784051",
-        "liquidation": "0xe413a321e8681d831f4dbccbca790d2952b56f977908e45be37335533e005286"
-    }
-
-    def get_logs(topic0, START_BLOCK_modified, END_BLOCK_modified):
-        params = {
-            "chainid": ETH_CHAIN_ID,
-            "module": "logs",
-            "action": "getLogs",
-            "address": AAVE_V3_POOL,
-            "topic0": topic0,
-            "fromBlock": START_BLOCK_modified,
-            "toBlock": END_BLOCK_modified,
-            "apikey": ETHERSCAN_API_KEY,
-        }
-        r = requests.get(ETHERSCAN_BASE_URL, params=params)
-        result = r.json()["result"]
-        if not isinstance(result, list):      # en cas d'erreur, "result" est un texte
-            raise RuntimeError(f"Erreur Etherscan : {result}")
-        return result
-    
-
-    def decode_log(event, log):
-        data = log["data"][2:]       # on enlève le "0x"
-        t = log["topics"]
-
-    # Champs communs à tous les événements
-        row = {
-            "event": event,
-            "block_number": decode(log["blockNumber"]),
-            "timestamp": decode(log["timeStamp"]),
-            "tx_hash": decode(log["transactionHash"]),
-            "log_index": decode(log["logIndex"]),
-        }
-
-        return row
-
-    tables = {}
-    for event, topic0 in EVENTS.items():
-        logs = get_logs(topic0, START_BLOCK_modified, END_BLOCK_modified)
-        print(f"{event}: {len(logs)} logs")
-        tables[event] = pd.DataFrame([decode_log(event, log) for log in logs])
-        time.sleep(0.4)     # le plan gratuit limite à 3 requêtes/seconde
-        print(tables)
-
-    tables["borrow"] 
-
-
-"""
-
-
+#on a rencontré un problème avec le code précédent, il a donc fallu en refaire un plus astucieux 
 #on divise par deux à chaque fois que ça sature 
 
-import time, requests, pandas as pd
+
 
 PAGE = 1000
-EVENTS = {
-    "supply": "0x2b627736bca15cd5381dcf80b0bf11fd197d01a037c52b927a881a10fb73ba61",
-    "withdraw": "0x3115d1449a7b732c986cba18244e897a450f61e1bb8d589cd2e69e6c8924f9f7",
-    "borrow": "0xb3d084820fb1a9decffb176436bd02558d15fac9b0ddfed8c465bc7359d7dce0",
-    "repay": "0xa534c8dbe71f871f9f3530e97a74601fea17b426cae02e1c5aee42c96c784051",
-    "liquidation": "0xe413a321e8681d831f4dbccbca790d2952b56f977908e45be37335533e005286",
-}
 
 def decode(valeur):
     return int(valeur, 16) if valeur not in ("0x", "") else 0
@@ -258,18 +135,6 @@ def fetch_logs(topic0, start, end):
         return logs
     mid = (start + end) // 2
     return fetch_logs(topic0, start, mid) + fetch_logs(topic0, mid + 1, end)
-"""#très rare d'utiliser ça 
-    if start == end:
-        page = 2
-        while True:
-            params["page"] = page
-            more = etherscan_get(params)
-            logs += more
-            if len(more) < PAGE:
-                break
-            page += 1
-        return logs
-"""
  
 
 def addr(x):

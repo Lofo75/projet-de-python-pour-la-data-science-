@@ -4,10 +4,15 @@
 # cohérentes, et préparer les colonnes pour les statistiques.
 
 
+import json
+import os             # pour lire les variables d'environnement d'Onyxia
+import sys
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
-import os             # pour lire les variables d'environnement d'Onyxia
 import pandas as pd   # pour manipuler des tableaux de données (DataFrame)
+import s3fs
 
 # VAULT_TOP_DIR contient le nom de ton bucket ("louis75")
 VAULT = os.environ["VAULT_TOP_DIR"]
@@ -136,101 +141,104 @@ exemple = "0x7FA5195595EFE0dFbc79f03303448af3FbE4ea91"
 print(portefeuille(exemple).round(4))
 tracer_portefeuille(exemple)
 
+#suite de la tentative avec l'utilisation des familles 
 
-#exposition agrégée de tous les utilisateurs 
-# ÉTAPE A (globale) : solde tracé de chaque user, token par token, après chaque transaction
-
-f = flux.copy()
-f["user_l"] = f["user"].str.lower()
-f["token"]  = f["token_address"].str.lower()      # ETH et WETH : même adresse, un seul solde
-f["ordre_tx"] = f.groupby(["user_l", "tx_hash"], sort=False).ngroup()   # n° de transaction, ordre du fichier
-
-# un mouvement par sens : - montant entier si envoyé, + part tracée si reçu
-sorties = f[f["from"].str.lower() == f["user_l"]].assign(mouvement=-f["montant"], sens=0)
-entrees = f[f["to"].str.lower() == f["user_l"]].assign(mouvement=f["traced_fraction"] * f["montant"], sens=1)
-mvts = pd.concat([sorties, entrees]).sort_values(["user_l", "token", "ordre_tx", "sens"])
-del f, sorties, entrees                           # libère la mémoire
-
-# solde par (user, token), sans jamais descendre sous 0
-cumul = mvts.groupby(["user_l", "token"])["mouvement"].cumsum()
-mvts["solde"] = cumul - cumul.groupby([mvts["user_l"], mvts["token"]]).cummin().clip(upper=0)
-
-print("solde minimum (doit être >= 0) :", mvts["solde"].min())
-
-
-
-
-
-# EXPOSITION AGRÉGÉE : total de chaque token détenu par l'ensemble des users, mois par mois
-# (nécessite mvts de l'étape A globale, avec la colonne "solde")
-# EXPOSITION AGRÉGÉE : total de chaque monnaie dans tous les portefeuilles, mois par mois
-# (nécessite mvts de l'étape A globale)
-
-MONNAIES = {
-    "USDC":     "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-    "USDT":     "0xdac17f958d2ee523a2206206994597c13d831ec7",
-    "DAI":      "0x6b175474e89094c44da98b954eedeac495271d0f",
-    "ETH+WETH": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-    "WBTC":     "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
-}
-DERNIER_MOIS = pd.Period("2026-05", freq="M")
-
-# on ne garde que les mouvements de ces monnaies
-m = mvts[mvts["token"].isin(MONNAIES.values())].copy()
-m["mois"] = m["date"].dt.to_period("M")
-
-# de combien le solde de chaque user a bougé à chaque mouvement
-m["variation"] = m.groupby(["user_l", "token"])["solde"].diff().fillna(m["solde"])
-
-# on additionne les variations de tous les users par mois, puis on cumule dans le temps
-total = m.groupby(["mois", "token"])["variation"].sum().unstack(fill_value=0)
-tous_les_mois = pd.period_range(total.index.min(), DERNIER_MOIS, freq="M")
-total = total.reindex(tous_les_mois, fill_value=0).cumsum()
-total = total.rename(columns={adresse: nom for nom, adresse in MONNAIES.items()})
-
-print(total.shape)          # (nombre de mois, nombre de monnaies)
-print(total.round(0))
-
-axes = total.plot(subplots=True, sharex=True, legend=False, figsize=(10, 2 * len(MONNAIES)))
-for ax, nom in zip(axes, total.columns):
-    ax.set_ylabel(nom, rotation=0, ha="right")
-axes[0].set_title("Quantité totale détenue grâce à Aave, tous users confondus")
-plt.savefig("exposition_agregee.png", dpi=150, bbox_inches="tight")
-plt.close()
-
-
-
-
-
-#maintenant on va faire d'autres statistiques descriptives en utilisant la classification 
-# ÉTAPE 6 : exposition par famille (USD, ETH, BTC)
-
-import json
-import sys
-from pathlib import Path
-
-import s3fs
+# ÉTAPE C : exposition par famille (USD, ETH, BTC…)
 
 # dossier racine du dépôt (là où se trouvent scripts/ et data/reference/)
 RACINE = Path.cwd() if (Path.cwd() / "scripts").exists() else Path.cwd().parent
 sys.path.insert(0, str(RACINE / "scripts"))
 from token_families import classify_tokens, token_inventory
 
-# les deux tables de correspondance du groupe
-aliases = json.loads((RACINE / "data/reference/symbol_aliases.json").read_text())
-reference = pd.DataFrame(json.loads((RACINE / "data/reference/token_reference.json").read_text()))
+FICHIER_FAMILLES = RACINE / "data" / "token_families.parquet"
+if FICHIER_FAMILLES.is_file():
+    familles = pd.read_parquet(FICHIER_FAMILLES)
+else:
+    fs = s3fs.S3FileSystem(client_kwargs={"endpoint_url": "https://" + os.environ["AWS_S3_ENDPOINT"]})
+    with fs.open(FICHIER_FLUX) as fichier:
+        inventaire = token_inventory(fichier)
+    refs = RACINE / "data" / "reference"
+    aliases = json.loads((refs / "symbol_aliases.json").read_text())
+    reference = pd.DataFrame(json.loads((refs / "token_reference.json").read_text()))
+    familles = classify_tokens(inventaire, reference, aliases)
+    familles.to_parquet(FICHIER_FAMILLES, index=False)   # pour ne pas recalculer la prochaine fois
 
-# une ligne par token, avec sa famille (on lit le fichier des flux directement sur S3)
-fs = s3fs.S3FileSystem()
-with fs.open(FICHIER_FLUX) as f:
-    familles_tokens = classify_tokens(token_inventory(f), reference, aliases)
-familles = familles_tokens.set_index("token_address")["family"]   # adresse -> famille
+# on ne garde que les types dont 1 token = 1 unité de la famille
+TYPES_1POUR1 = ["stablecoin", "spot", "native_and_wrapped", "wrapped_asset", "deposit_receipt", "debt"]
+fam = familles[["token_address", "family", "token_kind"]].copy()
+fam["token_address"] = fam["token_address"].str.lower()
+fam = fam[fam["family"].ne("Autre") & fam["token_kind"].isin(TYPES_1POUR1)]
+fam["poste"] = np.where(fam["token_kind"] == "debt", "dette", "avoir")
+fam = fam.set_index("token_address")[["family", "poste"]]
+
+print(fam["family"].value_counts().head(10))
+
+
+def portefeuille_familles(adresse):
+    """Tableau mois x (famille, poste) : quantités détenues et dues, par famille."""
+    adresse = adresse.lower()
+    f = flux[flux["user_l"] == adresse].copy()
+    f["token"] = f["token_address"].str.lower()
+    f = f[f["token"].isin(fam.index)]                 # seulement les tokens classés
+    f["ordre_tx"] = f.groupby("tx_hash", sort=False).ngroup()
+
+    # même calcul de soldes que l'étape A, token par token
+    sorties = f[f["from"].str.lower() == adresse].assign(mouvement=-f["montant"], sens=0)
+    entrees = f[f["to"].str.lower() == adresse].assign(mouvement=f["traced_fraction"] * f["montant"], sens=1)
+    m = pd.concat([sorties, entrees]).sort_values(["token", "ordre_tx", "sens"])
+    cumul = m.groupby("token")["mouvement"].cumsum()
+    m["solde"] = cumul - cumul.groupby(m["token"]).cummin().clip(upper=0)
+
+    # photo de fin de mois, token par token
+    m["mois"] = m["date"].dt.to_period("M")
+    tableau = m.groupby(["mois", "token"])["solde"].last().unstack()
+    tableau = tableau.reindex(pd.period_range(tableau.index.min(), DERNIER_MOIS, freq="M")).ffill().fillna(0)
+
+    # on remplace chaque token par (famille, poste), puis on additionne les colonnes identiques
+    tableau.columns = pd.MultiIndex.from_frame(fam.loc[tableau.columns].reset_index(drop=True))
+    return tableau.T.groupby(level=["family", "poste"]).sum().T
+
+
+def tracer_portefeuille_familles(adresse, nb_familles=3):
+    t = portefeuille_familles(adresse)
+    principales = t.max().groupby(level="family").max().nlargest(nb_familles).index
+    zero = pd.Series(0.0, index=t.index)
+    dates = t.index.to_timestamp()
+
+    fig, axes = plt.subplots(len(principales), 1, figsize=(10, 3 * len(principales)),
+                             sharex=True, squeeze=False)
+    for ax, famille in zip(axes[:, 0], principales):
+        avoir = t.get((famille, "avoir"), zero)
+        dette = t.get((famille, "dette"), zero)
+        ax.plot(dates, avoir, label="détenu")
+        ax.plot(dates, dette, label="dû à Aave")
+        ax.plot(dates, avoir - dette, "--", color="black", label="net")
+        ax.set_title(f"Famille {famille}")
+        ax.legend()
+        ax.grid(alpha=0.3)
+    axes[0, 0].figure.suptitle(f"Portefeuille tracé de {adresse[:10]}… par famille")
+    plt.tight_layout()
+    plt.savefig(f"portefeuille_familles_{adresse[:10]}.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+
+exemple = "0x7FA5195595EFE0dFbc79f03303448af3FbE4ea91"
+print(portefeuille_familles(exemple).round(4))
+tracer_portefeuille_familles(exemple)
+
+
+
+#maintenant on va faire d'autres statistiques descriptives en utilisant la classification 
+# ÉTAPE 6 : exposition par famille (USD, ETH, BTC)
+
+# on réutilise la classification de l'étape C : adresse -> famille
+famille_de = familles.assign(token_address=familles["token_address"].str.lower()).set_index("token_address")["family"]
 
 def famille_principale(f):
     # on garde les trois grandes familles, le reste est regroupé dans "Autre"
     return f if f in ("USD", "ETH", "BTC") else "Autre"
 
-print(familles.map(famille_principale).value_counts())
+print(famille_de.map(famille_principale).value_counts())
 
 
 # fonction pour dessiner un tableau croisé sous forme de carte de chaleur
@@ -263,7 +271,7 @@ def carte_chaleur(tableau, titre, xlabel, ylabel, fichier):
 
 ev = evenements[evenements["event_name"].isin(["Supply", "Borrow"])].copy()
 ev["user"] = ev["user"].str.lower()
-ev["famille"] = ev["reserve"].map(familles).map(famille_principale)   # reserve est déjà en minuscules
+ev["famille"] = ev["reserve"].map(famille_de).map(famille_principale)   # reserve est déjà en minuscules
 
 # une ligne par utilisateur et par famille déposée / empruntée
 depots = ev[ev["event_name"] == "Supply"][["user", "famille"]].drop_duplicates()
@@ -282,23 +290,198 @@ carte_chaleur(tableau_61,
               "depot_emprunt_familles.png")
 
 
-# 6.2 : ce que devient l'argent sorti d'Aave
 
-aval = flux.loc[~flux["tracked"], ["user", "tx_hash", "from", "to", "token_address"]].copy()   # hors transactions Aave
-aval["famille"] = aval["token_address"].str.lower().map(familles).map(famille_principale)
-user = aval["user"].str.lower()
 
-# ce que l'utilisateur envoie et ce qu'il reçoit, une ligne par transaction et par famille
-envoye = aval[aval["from"].str.lower() == user][["user", "tx_hash", "famille"]].drop_duplicates()
-recu = aval[aval["to"].str.lower() == user][["user", "tx_hash", "famille"]].drop_duplicates()
 
-# transactions où l'utilisateur envoie ET reçoit : ce sont des échanges
-echanges = envoye.merge(recu, on=["user", "tx_hash"], suffixes=("_envoyee", "_recue"))
+# ÉTAPE A (globale) : solde tracé de chaque user, token par token, après chaque transaction
+# on ne garde que les tokens classés de l'étape C : les soldes étant calculés token par token,
+# le résultat est le même et on utilise beaucoup moins de mémoire
 
-print("nombre d'échanges :", len(echanges[["user", "tx_hash"]].drop_duplicates()))
+f = flux[flux["token_address"].str.lower().isin(fam.index)].copy()
+f["token"]  = f["token_address"].str.lower()      # ETH et WETH : même adresse, un seul solde
+f["ordre_tx"] = f.groupby(["user_l", "tx_hash"], sort=False).ngroup()   # n° de transaction, ordre du fichier
 
-tableau_62 = pd.crosstab(echanges["famille_envoyee"], echanges["famille_recue"])
-carte_chaleur(tableau_62,
-              "Échanges après une sortie d'Aave : ce qu'on reçoit selon ce qu'on envoie",
-              "Famille reçue", "Famille envoyée",
-              "echanges_familles.png")
+# un mouvement par sens : - montant entier si envoyé, + part tracée si reçu
+sorties = f[f["from"].str.lower() == f["user_l"]].assign(mouvement=-f["montant"], sens=0)
+entrees = f[f["to"].str.lower() == f["user_l"]].assign(mouvement=f["traced_fraction"] * f["montant"], sens=1)
+mvts = pd.concat([sorties, entrees]).sort_values(["user_l", "token", "ordre_tx", "sens"])
+del f, sorties, entrees                           # libère la mémoire
+
+# solde par (user, token), sans jamais descendre sous 0
+cumul = mvts.groupby(["user_l", "token"])["mouvement"].cumsum()
+mvts["solde"] = cumul - cumul.groupby([mvts["user_l"], mvts["token"]]).cummin().clip(upper=0)
+
+print("solde minimum (doit être >= 0) :", mvts["solde"].min())
+
+
+# STAT 1 : exposition nette agrégée par famille, mois par mois
+# (nécessite mvts de l'étape A globale et fam de l'étape C)
+
+# on ne garde que les mouvements des tokens classés (1 token = 1 unité de la famille)
+m = mvts[mvts["token"].isin(fam.index)].copy()
+m = m.join(fam, on="token")                       # ajoute les colonnes family et poste
+m["mois"] = m["date"].dt.to_period("M")
+
+# de combien le solde de chaque user a bougé à chaque mouvement
+m["variation"] = m.groupby(["user_l", "token"])["solde"].diff().fillna(m["solde"])
+
+# on additionne les variations de tous les users, par mois, famille et poste, puis on cumule
+total = m.groupby(["mois", "family", "poste"])["variation"].sum().unstack(["family", "poste"], fill_value=0)
+tous_les_mois = pd.period_range(total.index.min(), DERNIER_MOIS, freq="M")
+total = total.reindex(tous_les_mois, fill_value=0).cumsum()
+
+print(total.tail(3).round(0))   # les 3 derniers mois
+
+# un graphique par grande famille : détenu, dû à Aave, net
+FAMILLES = ["USD", "ETH", "BTC"]
+zero = pd.Series(0.0, index=total.index)
+dates = total.index.to_timestamp()
+
+fig, axes = plt.subplots(len(FAMILLES), 1, figsize=(10, 3 * len(FAMILLES)), sharex=True)
+for ax, famille in zip(axes, FAMILLES):
+    avoir = total.get((famille, "avoir"), zero)
+    dette = total.get((famille, "dette"), zero)
+    ax.plot(dates, avoir, label="détenu")
+    ax.plot(dates, dette, label="dû à Aave")
+    ax.plot(dates, avoir - dette, "--", color="black", label="net")
+    ax.axhline(0, color="grey", linewidth=0.8)
+    ax.set_title(f"Famille {famille}")
+    ax.set_ylabel(f"quantité ({famille})")
+    ax.legend()
+    ax.grid(alpha=0.3)
+fig.suptitle("Exposition de l'ensemble des utilisateurs, grâce à l'argent issu d'Aave")
+plt.tight_layout()
+plt.savefig("exposition_nette_familles.png", dpi=150, bbox_inches="tight")
+plt.close()
+
+
+# STAT 2 : profils des utilisateurs à la fin des données
+# (nécessite m de la STAT 1)
+
+# dernier solde de chaque user pour chaque token
+dernier = m.groupby(["user_l", "token"]).tail(1)
+
+# on additionne par user, famille et poste : une ligne par user
+positions = dernier.groupby(["user_l", "family", "poste"])["solde"].sum().unstack(["family", "poste"], fill_value=0)
+colonnes = pd.MultiIndex.from_product([["USD", "ETH", "BTC"], ["avoir", "dette"]], names=["family", "poste"])
+positions = positions.reindex(columns=colonnes, fill_value=0)   # toutes les colonnes existent, même vides
+
+# en dessous de ces seuils, on considère que le solde est nul (poussières)
+SEUIL = {"USD": 1, "ETH": 0.001, "BTC": 0.0001}
+detient = {f: positions[(f, "avoir")] > SEUIL[f] for f in SEUIL}   # True si le user détient la famille
+doit = {f: positions[(f, "dette")] > SEUIL[f] for f in SEUIL}      # True si le user doit la famille
+
+# on range chaque user dans un profil (la première condition vraie l'emporte)
+conditions = [
+    ~(detient["USD"] | detient["ETH"] | detient["BTC"] | doit["USD"] | doit["ETH"] | doit["BTC"]),
+    ~(doit["USD"] | doit["ETH"] | doit["BTC"]),
+    detient["ETH"] & doit["USD"],
+    detient["BTC"] & doit["USD"],
+    doit["ETH"] & detient["USD"],
+    (detient["ETH"] & doit["ETH"]) | (detient["USD"] & doit["USD"]) | (detient["BTC"] & doit["BTC"]),
+]
+profils = [
+    "aucune position",
+    "épargnant (sans dette)",
+    "long ETH avec levier (détient ETH, doit USD)",
+    "long BTC avec levier (détient BTC, doit USD)",
+    "court ETH (doit ETH, détient USD)",
+    "looping (détient et doit la même famille)",
+]
+positions["profil"] = np.select(conditions, profils, default="autre emprunteur")
+
+# part des users dans chaque profil (sans ceux qui n'ont plus aucune position)
+actifs = positions[positions["profil"] != "aucune position"]
+parts = 100 * actifs["profil"].value_counts(normalize=True)
+print("users avec une position en mai 2026 :", len(actifs))
+print(parts.round(1))
+
+ax = parts.sort_values().plot.barh(figsize=(9, 4), color="#38768e")
+ax.set_xlabel("% des utilisateurs ayant une position")
+ax.set_title("Profils des utilisateurs à la fin des données (mai 2026)")
+for i, valeur in enumerate(parts.sort_values()):
+    ax.text(valeur + 0.5, i, f"{valeur:.1f} %", va="center")
+plt.savefig("profils_utilisateurs.png", dpi=150, bbox_inches="tight")
+plt.close()
+
+
+# STAT 3 : concentration de l'exposition nette à l'ETH
+# (nécessite positions et SEUIL de la STAT 2)
+
+# exposition nette à l'ETH de chaque user : ce qu'il détient moins ce qu'il doit
+net_eth = positions[("ETH", "avoir")] - positions[("ETH", "dette")]
+net_eth = net_eth[net_eth > SEUIL["ETH"]]                # users exposés positivement à l'ETH
+net_eth = net_eth.sort_values(ascending=False)           # du plus exposé au moins exposé
+
+# part cumulée : les k premiers users détiennent quelle part du total ?
+part_cumulee = net_eth.cumsum() / net_eth.sum()
+n = len(net_eth)
+
+print("users exposés positivement à l'ETH :", n)
+print("exposition nette totale (ETH) :", round(net_eth.sum(), 1))
+for p in [0.01, 0.10, 0.50]:
+    k = max(1, int(n * p))                               # nombre de users dans le top p
+    print(f"les {p:.0%} les plus exposés détiennent {100 * part_cumulee.iloc[k - 1]:.1f} % de l'exposition")
+
+# courbe de concentration
+x = 100 * np.arange(1, n + 1) / n                        # % des users (du plus exposé au moins exposé)
+y = 100 * part_cumulee.values                            # % de l'exposition totale qu'ils détiennent
+
+fig, ax = plt.subplots(figsize=(6, 5))
+ax.plot(x, y, label="observé")
+ax.plot([0, 100], [0, 100], "--", color="grey", label="si tous les users étaient égaux")
+ax.set_xlabel("% des utilisateurs, du plus exposé au moins exposé")
+ax.set_ylabel("% de l'exposition nette à l'ETH")
+ax.set_title("Concentration de l'exposition à l'ETH (mai 2026)")
+ax.legend()
+ax.grid(alpha=0.3)
+plt.savefig("concentration_eth.png", dpi=150, bbox_inches="tight")
+plt.close()
+
+
+# STAT 2 bis : évolution des profils des utilisateurs, mois par mois
+# (nécessite m de la STAT 1, SEUIL et profils de la STAT 2)
+
+# variation du solde de chaque user, par mois, famille et poste (on garde USD, ETH et BTC)
+v = m[m["family"].isin(["USD", "ETH", "BTC"])]
+v = v.groupby(["user_l", "mois", "family", "poste"])["variation"].sum().unstack(["family", "poste"], fill_value=0)
+colonnes = pd.MultiIndex.from_product([["USD", "ETH", "BTC"], ["avoir", "dette"]], names=["family", "poste"])
+v = v.reindex(columns=colonnes, fill_value=0)
+
+# on complète les mois sans mouvement (variation 0), puis on cumule : solde de fin de mois de chaque user
+tous_les_mois = pd.period_range(m["mois"].min(), DERNIER_MOIS, freq="M")
+grille = pd.MultiIndex.from_product([v.index.get_level_values("user_l").unique(), tous_les_mois],
+                                    names=["user_l", "mois"])
+soldes = v.reindex(grille, fill_value=0).groupby(level="user_l").cumsum()
+
+# même classement que la STAT 2, appliqué à chaque user et à chaque mois
+detient = {f: soldes[(f, "avoir")] > SEUIL[f] for f in SEUIL}
+doit = {f: soldes[(f, "dette")] > SEUIL[f] for f in SEUIL}
+conditions = [
+    ~(detient["USD"] | detient["ETH"] | detient["BTC"] | doit["USD"] | doit["ETH"] | doit["BTC"]),
+    ~(doit["USD"] | doit["ETH"] | doit["BTC"]),
+    detient["ETH"] & doit["USD"],
+    detient["BTC"] & doit["USD"],
+    doit["ETH"] & detient["USD"],
+    (detient["ETH"] & doit["ETH"]) | (detient["USD"] & doit["USD"]) | (detient["BTC"] & doit["BTC"]),
+]
+profil_mois = pd.Series(np.select(conditions, profils, default="autre emprunteur"), index=soldes.index)
+
+# nombre de users dans chaque profil, mois par mois (sans "aucune position")
+evolution = profil_mois[profil_mois != "aucune position"].groupby(level="mois").value_counts().unstack(fill_value=0)
+parts_mois = 100 * evolution.div(evolution.sum(axis=1), axis=0)
+print(parts_mois.tail(3).round(1))
+
+fig, axes = plt.subplots(2, 1, figsize=(11, 8), sharex=True)
+evolution.index = evolution.index.to_timestamp()
+parts_mois.index = parts_mois.index.to_timestamp()
+evolution.plot.area(ax=axes[0], legend=False)
+axes[0].set_ylabel("nombre d'utilisateurs")
+axes[0].set_title("Utilisateurs ayant une position, par profil")
+parts_mois.plot.area(ax=axes[1], legend=False)
+axes[1].set_ylabel("% des utilisateurs")
+axes[1].set_title("Part de chaque profil")
+axes[1].set_xlabel("Mois")
+axes[0].legend(loc="upper left", bbox_to_anchor=(1.01, 1), fontsize=8)
+plt.savefig("profils_evolution.png", dpi=150, bbox_inches="tight")
+plt.close()
