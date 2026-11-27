@@ -104,19 +104,19 @@ EVENTS= {
 
 
 
-PAGE = 1000
+PAGE = 1000     # nombre maximal de résultats renvoyés par Etherscan en un appel
 
 def decode(valeur):
     return int(valeur, 16) if valeur not in ("0x", "") else 0
 
-def etherscan_get(params, retries=5):
+def etherscan_get(params, retries=5):       # envoie une requête à Etherscan et recommence jusqu'à 5 fois en cas d'erreur
     for attempt in range(retries):
         try:
             result = requests.get(ETHERSCAN_BASE_URL, params=params, timeout=15).json().get("result")
-        except requests.exceptions.RequestException as err:   # timeout
+        except requests.exceptions.RequestException as err:   
             result = f"erreur réseau : {err}"
         if isinstance(result, list):  #on teste si c'est une liste 
-            time.sleep(0.35)
+            time.sleep(0.35)        ## pause pour respecter la limite de 3 requêtes par seconde
             return result
         print(f"  tentative {attempt + 1}/{retries} échouée : {result}", flush=True)
         time.sleep(1 + attempt)
@@ -131,10 +131,10 @@ def fetch_logs(topic0, start, end):
         "apikey": ETHERSCAN_API_KEY,
     }
     logs = etherscan_get(params)
-    if len(logs) < PAGE:
+    if len(logs) < PAGE:                # moins de 1 000 résultats : l'intervalle est complet
         return logs
-    mid = (start + end) // 2
-    return fetch_logs(topic0, start, mid) + fetch_logs(topic0, mid + 1, end)
+    mid = (start + end) // 2                # sinon, on coupe l'intervalle en deux
+    return fetch_logs(topic0, start, mid) + fetch_logs(topic0, mid + 1, end). #et on recommence sur chaque moitié
  
 
 def addr(x):
@@ -145,14 +145,14 @@ def decode_log(event, log):
     w = [data[i:i+64] for i in range(0, len(data), 64)]      # data découpé en mots de 32 octets
     t = log["topics"]
 
-    row = {                                                  # on stocke dans une variable...
+    row = {                                                  # on stocke dans une variable.
         "event": event,
         "block_number": decode(log["blockNumber"]),
         "timestamp": decode(log["timeStamp"]),
         "tx_hash": log["transactionHash"],
         "log_index": decode(log["logIndex"]),
     }
-
+# la place de chaque information dépend du type d'événement (voir la documentation d'Aave)
     if event in ("supply", "borrow"):                        
         row["reserve"] = addr(t[1])
         row["user"] = addr(w[0])
@@ -169,6 +169,8 @@ def decode_log(event, log):
         row["liquidator"] = addr(w[2])
 
     return row                                               # on return à la fin 
+
+# pour chaque type d'événement : collecte complète, décodage, puis enregistrement en CSV
 tables = {}
 for event, topic0 in EVENTS.items():
     logs = fetch_logs(topic0, START_BLOCK, END_BLOCK)    
