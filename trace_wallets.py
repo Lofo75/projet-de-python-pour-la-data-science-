@@ -1,76 +1,4 @@
-"""
-Keep the transfers of each wallet that can be traced back to its Aave V3
-activity, with a per-user, chronological portfolio ledger.
-
-Adapted from To_Be_Adapted/trace_wallets.py, with simpler rules. Each user
-has one ledger, token_address -> traced quantity (in token units, >= 0):
-the part of the wallet's balance that comes from Aave. The user's
-transfers are grouped by transaction, in the order they were fetched
-(ascending block), and every row of a transaction gets the same
-traced_fraction f:
-
-  - Aave transaction (tracked = True, i.e. the user has an Aave event in
-    it, see match_events_transfers.py): f = 1.
-  - Any other transaction: f = min(1, balance / amount) over the tokens sent
-    by the user (amount > 0) that have a traced balance > 0 (weakest link;
-    sent tokens with no traced balance are ignored, and so are zero-value
-    sends, often address-poisoning spam). f = 0 if there are none, which
-    includes every pure receive: tokens coming from outside (CEX
-    withdrawals, payments, airdrops, spam) are never traced.
-
-When f > 0, every token sent is debited from the ledger (floored at 0) and
-every token received is credited with f * amount. When f = 0, the ledger is
-untouched. So the ledger starts at the user's first Aave transaction and
-only grows through Aave transactions and through what is obtained by
-spending traced tokens (swaps, LP deposits, ...).
-
-Transfers from the user to themselves count as both sent and received. Debt
-tokens are traced like any other ERC-20 token.
-
-NATIVE ETH (ETH_FILE, see fetch_eth_etherscan.py) is added to the ERC-20
-transfers as rows of a token with WETH's address and the symbol "ETH": as in
-the original script, ETH and WETH share one ledger entry. Only the rows that
-move ETH are used (value > 0, is_error = 0). Wrapping and unwrapping (ETH
-sent to the WETH contract, ETH paid by it) are dropped: WETH emits no ERC-20
-Transfer for them, and within one ledger entry they change nothing. An ETH
-row is tracked when the user has an Aave event in its transaction. Each
-user's ETH and ERC-20 rows are merged in block order (within a block, the
-ERC-20 transactions come first: the order of transactions within a block is
-unknown). The users whose ETH history was cut by the fetch (ETH_STATUS_DIR)
-are skipped entirely.
-
-ORIGINAL PORTFOLIO: the user's own funds that entered the traced flows, as
-a log of contributions (every user is treated as supplying their own
-collateral, and aTokens are assets like any other):
-  - "supply": in an Aave transaction, each reserve supplied (Supply events
-    of EVENTS_FILE, user = onBehalfOf), minus the traced tokens re-supplied:
-    min(balance, amount sent by the user), which is debited from the
-    ledger. Re-supplying borrowed or withdrawn tokens is not counted again;
-    a Supply paid by someone else (or in native ETH) counts in full.
-  - "complement": in another transaction with f > 0, each token sent with
-    no traced balance, for f * amount: the own funds consumed alongside the
-    traced ones (e.g. own ETH added to borrowed USDC in an LP deposit).
-    Debt tokens (symbol starting with DEBT_PREFIXES) are never complements:
-    burning one repays a loan, it does not spend own funds.
-
-Transfers (ERC-20 and ETH) after the last block of EVENTS_FILE are dropped: there, Aave
-transactions could not be recognised. The rows of INPUT_FILE are read in
-chunks of CHUNK_ROWS (a user is split
-across chunks at most at a chunk border: its rows are carried over to the
-next chunk). Outputs:
-  - OUT_FILE:     the transfers with traced_fraction > 0 (ETH rows included,
-    token_symbol "ETH"), plus that column;
-  - LEDGERS_FILE: each user's final ledger, one row per token touched by a
-    transaction with f > 0 (zeroed entries included);
-  - ORIGINAL_FILE: the original portfolio contributions, one row per
-    (transaction, token, source). Sum them by user and token for the
-    portfolio, or cumulate them by block for its history.
-The decimals and symbols of the reserves are read on RPC_URL.
-Usage:
-    python3 trace_wallets.py
-"""
 from collections import defaultdict
-
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -95,13 +23,7 @@ WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"  # native ETH rows use this 
 
 
 def trace_user(user, tx_hash, src, dst, token, amount, tracked, supplies=None, debt_tokens=()):
-    """traced_fraction of each transfer of one user (lists in fetch order), the final ledger
-    and the contributions to the original portfolio.
-
-    user, src, dst and token are lowercased addresses; amount is in token units. supplies is
-    tx_hash -> {reserve: amount supplied} from the user's Supply events. debt_tokens are
-    traced like any token but never counted as complements. Each contribution is (index of the
-    first row of its transaction, token, quantity, source)."""
+    """traced_fraction of each transfer of one user, the final ledger and the contributions to the original portfolio."""
     supplies = supplies or {}
     fractions = [0.0] * len(tx_hash)
     ledger = {}
@@ -119,10 +41,8 @@ def trace_user(user, tx_hash, src, dst, token, amount, tracked, supplies=None, d
             if dst[i] == user:
                 inc[token[i]] += amount[i]
 
-        if tracked[rows[0]]:  # Aave transaction (tracked is the same for every row of it)
+        if tracked[rows[0]]:  # Aave transaction
             f = 1.0
-            # the traced tokens re-supplied are the part of the user's transfer that the ledger
-            # covers (debited below); the rest of the amount supplied is own funds
             for t, a in supplies.get(h, {}).items():
                 q = a - min(ledger.get(t, 0.0), out.get(t, 0.0))
                 if q > 0:
@@ -149,7 +69,7 @@ def trace_user(user, tx_hash, src, dst, token, amount, tracked, supplies=None, d
 
 
 def reserve_info(reserves):
-    """Lowercased reserve -> (decimals, symbol), read with decimals() and symbol() on RPC_URL."""
+    """Lowercased reserve -> (decimals, symbol)"""
     calls = [(r, sel) for r in reserves for sel in ("0x313ce567", "0x95d89b41")]
     results = {}
     for k in range(0, len(calls), 50):  # the node accepts batches of 50 calls
@@ -161,7 +81,7 @@ def reserve_info(reserves):
     info = {}
     for r in reserves:
         raw = results[(r, "0x95d89b41")]
-        if len(raw) > 32:  # ABI string: offset, length, data
+        if len(raw) > 32:
             symbol = raw[64:64 + int.from_bytes(raw[32:64], "big")].decode(errors="replace")
         else:  # bytes32 (e.g. MKR)
             symbol = raw.rstrip(b"\0").decode(errors="replace")
@@ -170,8 +90,10 @@ def reserve_info(reserves):
 
 
 def load_events(fs):
-    """user -> tx_hash -> {reserve: amount supplied in token units}, reserve -> symbol, the
-    last block of the events, and the (tx_hash, user) of every event (lowercased)."""
+    """ user -> tx_hash -> {reserve: amount supplied in token units}, 
+        reserve -> symbol, 
+        the last block of the events, 
+        the (tx_hash, user) of every event"""
     with fs.open(EVENTS_FILE, "rb") as f:
         ev = pd.read_parquet(f, columns=["event_name", "block_number", "user", "tx_hash", "reserve",
                                          "amount_raw"])
@@ -198,8 +120,6 @@ def cut_eth_users(fs):
 
 
 def load_eth(fs, schema, last_block, aave_txs, skip):
-    """The rows of ETH_FILE that move ETH, as transfer rows of `schema` sorted by user, and
-    lowercased user -> (first row, end row)."""
     with fs.open(ETH_FILE, "rb") as f:
         t = pq.read_table(f, columns=["user", "kind", "block_number", "timestamp", "tx_hash",
                                       "from", "to", "value", "is_error"])
@@ -221,7 +141,7 @@ def load_eth(fs, schema, last_block, aave_txs, skip):
 
 
 def add_eth(table, eth, eth_index):
-    """table (whole users) with the ETH rows of its users, each user's rows in block order."""
+    """table with the ETH rows and ERC-20 transfers rows, chronological order."""
     users = pc.unique(pc.utf8_lower(table.column("user"))).to_pylist()  # in order of appearance
     parts = []
     for u in users:
