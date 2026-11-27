@@ -27,7 +27,7 @@ def load_credentials():
 ETHERSCAN_BASE_URL = "https://api.etherscan.io/v2/api"
 ETH_CHAIN_ID = 1
 # START_BLOCK  = 16_496_817  # first Aave V3 Pool event
-START_BLOCK  = 25,200,000 # used only for testing
+START_BLOCK  = 25_200_000 # used only for testing
 
 WALLETS_EVENTS_FILE = "s3://bastienlevyguinot/diffusion/aave_v3_events.parquet"
 TRANSFERS_FILE      = "s3://bastienlevyguinot/diffusion/transfers_wallets.parquet"

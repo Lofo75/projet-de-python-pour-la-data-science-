@@ -9,12 +9,19 @@ made possible by an earlier interaction with Aave.
 All data is on the Onyxia S3 bucket `s3://bastienlevyguinot/`. Each step is
 one Python script, listed in [Reproducing](#8-reproducing) at the end.
 
+> **Provisional version.** The selection of users (section 2) has been
+> rewritten as a single script, `preprocess_events_and_transfers.py`, which
+> has been run. The tracing (sections 3 to 6) has not been run again since:
+> its results come from the previous version of the selection, which
+> applied the same rules in several scripts and kept 175,453 wallets
+> instead of 175,446. Section 8 says which files each step reads.
+
 ## 1. Raw data
 
 | Data | Source | Size |
 |---|---|---|
 | Aave V3 Pool events: Supply, Withdraw, Borrow, Repay, LiquidationCall | RPC node (`eth_getLogs`) on the Aave V3 Ethereum main market | 3,919,908 events, 207,780 distinct users |
-| ERC-20 transfers sent or received by each user | Etherscan `tokentx` | 46,916,198 transfers (after section 2) |
+| ERC-20 transfers sent or received by each user | Etherscan `tokentx` | 50,824,039 transfers, 48,083,055 after section 2 |
 | Native ETH flows of each user | Etherscan `txlist` (the user's transactions) and `txlistinternal` (ETH paid by contracts) | 36,356,546 rows, 14,340,218 of them actually moving ETH |
 
 **Period.** From the first Aave V3 event (block 16,496,817, 2023-01-27) to
@@ -33,28 +40,58 @@ An Aave "user" is any address that appears in the `user` field of an event.
 Some of them are not people: token contracts, protocols, bots. Their
 transfer histories would swamp the data (a token contract "sees" every
 transfer of its token), and their flows are not decisions of a holder.
-We keep **wallets**, i.e. addresses controlled by someone.
+We keep **wallets**, i.e. addresses controlled by someone. This is done by
+`preprocess_events_and_transfers.py`.
 
-| Reason for dropping an address | How it is detected | Addresses |
-|---|---|---|
-| Aave reserve or ERC-20 token contract | appears as a reserve in the events, or as a token address in any transfer | 370 |
-| Burn address | fixed list | 1 |
-| Other smart contract (router, vault, bot…) | `eth_getCode` returns code that is not a wallet | 31,826 |
-| History cut by the fetch, with Aave activity after the cut | an event happens after the last transfer fetched | 83 |
-| History cut by the fetch, without activity after the cut | one extra Etherscan call finds transfers after the last one saved | 46 |
+**A user is complete or absent, never partial.** The fetch stops at ~20,000
+transfers per address (20 calls of 1,000), so that bots with millions of
+transfers do not block it. An address still cut after that, or with more
+than 1,000 transfers in a single block, is not saved at all and is listed
+in `diffusion/skipped_users_during_transfers_fetching.parquet`. Tracing
+needs the whole history of a user: a partial one would be wrong from the
+first missing transfer.
+
+Addresses are lowercased in both tables (Ethereum addresses are
+case-insensitive, but the APIs return mixed-case checksums), then the rules
+are applied in this order. An address can match several rules: its reasons
+are joined with `+`.
+
+| # | Reason | Rule | How it is detected |
+|---|---|---|---|
+| 1 | `skipped_fetch` | history not saved by the fetch | listed by the fetch (see above) |
+| 1 | `burn` | burn address | fixed list (null address, `0x…dead`, precompiles) |
+| 1 | `reserve` | Aave reserve | appears as a reserve or collateral in the events |
+| 1 | `token` | ERC-20 token contract | appears as a token address in any transfer |
+| 2 | `no_transfers` | no transfer at all | no row in the fetched transfers |
+| 2 | `event_after_last_transfer` | inconsistent history | an event is later than the user's last transfer |
+| 3 | `contract` | other smart contract (router, vault, bot…) | `eth_getCode` returns code that is not a wallet |
 
 Kept as wallets: plain addresses with no code, addresses with EIP-7702
 delegated code (still controlled by a private key) and Safe multisig
-wallets. Other smart-contract wallets cannot be told apart from protocols and
-are dropped with them.
+wallets (recognised by their `masterCopy()` function and small size). Other
+smart-contract wallets cannot be told apart from protocols and are dropped
+with them. The code types are cached in `aave_v3/code_types_parts/`.
 
-The fetch keeps at most ~20,000 transfers per address, so that bots with
-millions of transfers do not block it. A user whose history was cut is
-dropped entirely, rather than kept with a partial history.
+| Reason | Addresses | Their transfers | Their events |
+|---|---:|---:|---:|
+| `contract` | 31,601 | 2,377,795 | 313,478 |
+| `skipped_fetch` (18 of them also `token`, `reserve` or `burn`) | 379 | 0 | 1,065,065 |
+| `token` | 353 | 363,189 | 58,542 |
+| `burn` | 1 | 0 | 5 |
+| **Total dropped** | **32,334** | **2,740,984** | **1,437,090** |
 
-**Result: 175,453 wallets**, with 2,483,263 events and 46,916,198 ERC-20
-transfers. The list of dropped addresses and their reasons is in
-`aave_v3/dropped_addresses.csv`.
+The rules of step 2 drop nobody: thanks to the complete-or-absent fetch, no
+incomplete history is left. The 379 addresses skipped by the fetch are 0.2%
+of the users but hold 27% of the events: very active bots.
+
+**Result: 175,446 wallets**, with 2,482,818 events and 48,083,055 ERC-20
+transfers. The dropped addresses and their reasons are in
+`diffusion/skipped_addresses.parquet`.
+
+*Previous version, used for the results of sections 3 to 6:* the fetch
+saved cut histories, which were dropped afterwards (129 users), and the
+same identity and code rules were applied in separate scripts. It kept
+**175,453 wallets**, with 2,483,263 events and 46,916,198 ERC-20 transfers.
 
 ## 3. Linking transfers to Aave
 
@@ -212,20 +249,29 @@ them up over time gives its history.
 
 ## 8. Reproducing
 
-Run in this order (each script's docstring gives its details):
+Run in this order:
 
 | Step | Script | Main output |
 |---|---|---|
-| Aave V3 events | `fetch_events_web3.py` | `aave_v3/aave_v3_events.parquet` |
-| ERC-20 transfers per user | `fetch_transfers_etherscan.py` | `aave_v3/transfers_parts/` |
-| Completeness checks | `transfers_fetching_checks.py`, `transfers_fetching_marginal_checks.py` | printed |
-| Drop reserves, tokens, burn addresses | `drop_non_wallets.py` | `aave_v3/transfers_parts_wallets/` |
-| Drop contracts | `transfers_drop_contracts.py` | `diffusion/transfers_wallets.parquet` |
-| Events of wallets | `preprocess_events.py` | `diffusion/aave_v3_events_wallets.parquet` |
-| `tracked` column, event checks | `match_events_transfers.py` | `diffusion/transfers_wallets.parquet` |
-| Drop cut histories | `drop_truncated.py`, `transfers_drop_incomplete.py` | all files above |
+| Aave V3 events | `fetch_events_web3.py` | `diffusion/aave_v3_events.parquet` |
+| ERC-20 transfers per user | `fetch_transfers_etherscan.py` | `aave_v3/transfers_parts/`, `diffusion/transfers.parquet` |
 | Native ETH per user | `fetch_eth_etherscan.py` | `diffusion/eth_transfers_wallets.parquet` |
-| **Tracing** | **`trace_wallets.py`** | see below |
+| Keep wallets (section 2) | `preprocess_events_and_transfers.py` | `aave_v3/transfers_parts_preprocessed/`, `diffusion/transfers_preprocessed.parquet`, `diffusion/aave_v3_events_preprocessed.parquet` |
+| `tracked` column, event checks (section 3) | `match_events_transfers.py` | `diffusion/transfers_wallets.parquet`, `aave_v3/events_transfers_checks.parquet` |
+| **Tracing** (sections 4-5) | **`trace_wallets.py`** | see below |
+
+**Files not yet connected.** `match_events_transfers.py` and
+`trace_wallets.py` still read the files of the previous version
+(`aave_v3/transfers_parts_wallets/`,
+`diffusion/aave_v3_events_wallets.parquet`), not the `*_preprocessed`
+outputs. To run them on the current selection, point their input
+constants to those outputs (`trace_wallets.py` needs the `tracked` column
+added by `match_events_transfers.py`). Likewise, the ETH file and
+`aave_v3/eth_status_parts/` (read by `trace_wallets.py` to leave out the
+users whose ETH history was cut) come from the previous version of
+`fetch_eth_etherscan.py`.
+
+Versions of these scripts runnable in Google Colab are in `notebook_copies/`.
 
 Outputs of `trace_wallets.py`:
 
