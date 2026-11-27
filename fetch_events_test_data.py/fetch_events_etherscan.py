@@ -153,7 +153,7 @@ def decode_log(event, log):
         "log_index": decode(log["logIndex"]),
     }
 
-    if event in ("supply", "borrow"):                        # ...pour pouvoir la compléter ici
+    if event in ("supply", "borrow"):                        
         row["reserve"] = addr(t[1])
         row["user"] = addr(w[0])
         row["amount_raw"] = int(w[1], 16)
@@ -168,7 +168,7 @@ def decode_log(event, log):
         row["debt_to_cover_raw"] = int(w[0], 16)
         row["liquidator"] = addr(w[2])
 
-    return row                                               # un seul return, tout à la fin
+    return row                                               # on return à la fin 
 tables = {}
 for event, topic0 in EVENTS.items():
     logs = fetch_logs(topic0, START_BLOCK, END_BLOCK)    
