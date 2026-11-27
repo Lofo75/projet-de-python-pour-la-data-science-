@@ -53,25 +53,10 @@ def preparer_flux(flux):
     return flux
 
 #on va utiliser le fichier de famille de ruben qui associe les transferts à des familles 
-def charger_familles(fichier_flux):
-    """Table token -> (family, poste), limitée aux familles USD, ETH, BTC."""
-    racine = Path.cwd() if (Path.cwd() / "scripts").exists() else Path.cwd().parent
-    fichier = racine / "data" / "token_families.parquet"
 
-    if fichier.is_file():
-        familles = pd.read_parquet(fichier)
-    else:                                   # premier lancement : on calcule et on garde le résultat
-        import s3fs
-        sys.path.insert(0, str(racine / "scripts"))
-        from token_families import classify_tokens, token_inventory
-        fs = s3fs.S3FileSystem(client_kwargs={"endpoint_url": "https://" + os.environ["AWS_S3_ENDPOINT"]})
-        with fs.open(fichier_flux) as f:
-            inventaire = token_inventory(f)
-        refs = racine / "data" / "reference"
-        aliases = json.loads((refs / "symbol_aliases.json").read_text())
-        reference = pd.DataFrame(json.loads((refs / "token_reference.json").read_text()))
-        familles = classify_tokens(inventaire, reference, aliases)
-        familles.to_parquet(fichier, index=False)
+def charger_familles():
+    """Table token -> (family, poste), limitée aux familles USD, ETH, BTC."""
+    familles = pd.read_parquet("s3://louis75/diffusion/token_families.parquet")    # la table déjà calculée, dans mon dossier diffusion
 
     fam = familles[["token_address", "family", "token_kind"]].copy()
     fam["token_address"] = fam["token_address"].str.lower()             #on remet en minuscule pour que toutes les sources de données soient de même format
@@ -79,6 +64,10 @@ def charger_familles(fichier_flux):
     fam["poste"] = np.where(fam["token_kind"] == "debt", "dette", "avoir")          #on définit dette et avoir, si ce n'est pas une dette c'est un avoir 
     return fam.drop_duplicates("token_address").set_index("token_address")[["family", "poste"]]
 
+
+fam = charger_familles()
+print("tokens classés :", len(fam))
+print(pd.crosstab(fam["family"], fam["poste"]))
 
 #on créé un tableau qui montre ce que chaque user possède et doit (uniquement dans les monnaies considérées)par mois
 
@@ -265,7 +254,7 @@ def stat4_variation_exposition(total):
 if __name__ == "__main__":
     flux, evenements, fichier_flux = charger_donnees()
     flux = preparer_flux(flux)
-    fam = charger_familles(fichier_flux)
+    fam = charger_familles()
     print("flux :", flux.shape, "| événements :", evenements.shape, "| tokens classés :", len(fam))
 
     stat_evenements_par_mois(evenements, flux)
