@@ -56,8 +56,9 @@ quantités**, pas en valeur :
 ## 2. L'idée centrale : filtrer les transactions par provenance
 
 **Le problème.** Le wallet d'un utilisateur d'Aave sert à bien d'autres choses
-qu'Aave : salaires reçus, achats sur une plateforme d'échange, *airdrops*,
-spam. Deux approches simples existent, et aucune ne convient :
+qu'Aave : salaires reçus, interaction avec d'autres protocoles de finance décentralisée, airdrops,
+paiement, ... .
+Deux approches simples existent, et aucune ne convient :
 
 | Approche | Ce qu'elle mesure | Pourquoi elle ne convient pas |
 |---|---|---|
